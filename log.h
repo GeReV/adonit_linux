@@ -32,12 +32,14 @@ static void inline set_log_syslog(void)
 {
 	log_use_stdout = 0;
 }
-
 #define log(l, x...) do { \
+			fprintf(stderr, x); \
+	} while(0)
+/*#define log(l, x...) do { \
 		if (log_use_stdout) { \
 			fprintf(stderr, x); \
 		} else \
 			syslog(l, x); \
-	} while(0)
+	} while(0)*/
 #endif	/* LOG_H */
 

@@ -6,14 +6,16 @@ CONFIG   += console
 CONFIG   -= app_bundle
 
 SOURCES += main.cpp \
-    tester.cpp
+    tester.cpp \
+    uinput.cpp
 
 LIBS += -L$$OUT_PWD -lgato
 INCLUDEPATH += $$PWD/../libgato
 DEPENDPATH += $$PWD/../libgato
 
 HEADERS += \
-    tester.h
+    tester.h \
+    uinput.h
 
 contains(MEEGO_EDITION,harmattan) {
     target.path = /opt/gato-test/bin
