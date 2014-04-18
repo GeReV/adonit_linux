@@ -122,8 +122,8 @@ int UInput::uinput_create(struct uinput_info *info)
 
 	memset(&dev, 0, sizeof(dev));
 
-	if (info->init_info(info, &dev))
-		goto err;
+	//if (info->init_info(info, &dev))
+	//	goto err;
 
 	switch(info->create_mode) {
 		case SELF_CREATE:
@@ -136,10 +136,11 @@ int UInput::uinput_create(struct uinput_info *info)
 			return -1;
 	}
 
-	if (info->enable_events(info, &dev))
-		goto err;
+	//if (info->enable_events(info, &dev))
+	//	goto err;
 
 	if (need_init) {
+		log(STD_ERR, "TEST: %d", info->fd);
 		retval = ioctl(info->fd, UI_DEV_CREATE);
 		if (retval == -1) {
 			perror("Unable to create uinput device: ");

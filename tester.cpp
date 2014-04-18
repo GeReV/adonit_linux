@@ -51,9 +51,13 @@ void Tester::handleConnected()
 	qDebug() << "Peripheral connected";
 	peripheral->discoverServices();
 
-	if (uinput->uinput_create(&info) && uinput->wacom_set_events(&info) && uinput->wacom_set_initial_values(&info, &dev)) {
-		qDebug() << "Device created successfully!";
-	}
+    info.create_mode = WDAEMON_CREATE;
+
+	qDebug() << uinput->uinput_create(&info);
+    qDebug() << uinput->wacom_set_events(&info);
+    qDebug() << uinput->wacom_set_initial_values(&info, &dev);
+	//	qDebug() << "Device created successfully!";
+	//}
 }
 
 void Tester::handleDisconnected()
