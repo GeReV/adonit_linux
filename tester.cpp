@@ -31,7 +31,7 @@ void Tester::test()
 void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi)
 {
 	qDebug() << "Found peripheral" << peripheral->address().toString() << peripheral->name();
-	if (peripheral->name() == "JN104FE9") {
+//	if (peripheral->name() == "JN104FE9") {
 		manager->stopScan();
 		this->peripheral = peripheral;
 		connect(peripheral, SIGNAL(connected()), SLOT(handleConnected()));
@@ -40,7 +40,7 @@ void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi)
 		connect(peripheral, SIGNAL(characteristicsDiscovered(GatoService)), SLOT(handleCharacteristics(GatoService)));
 		connect(peripheral, SIGNAL(valueUpdated(GatoCharacteristic,QByteArray)), SLOT(handleValueUpdated(GatoCharacteristic,QByteArray)));
 		peripheral->connectPeripheral();
-	}
+//	}
 }
 
 void Tester::handleConnected()
@@ -48,9 +48,9 @@ void Tester::handleConnected()
 	qDebug() << "Peripheral connected";
 	peripheral->discoverServices();
 
-	/*if (uinput_create(&info) && wacom_set_events(&info) && wacom_set_initial_values(&info, &dev)) {
+	if (uinput_create(&info) && wacom_set_events(&info) && wacom_set_initial_values(&info, &dev)) {
 		qDebug() << "Device created successfully!";
-	}*/
+	}
 }
 
 void Tester::handleDisconnected()
@@ -109,7 +109,7 @@ void Tester::handleReport(int p, int x, int y, int z)
 		ev.code = BTN_0;
 		ev.value = btn_0;
 
-		//uinput_write_event(&info, &ev);
+		uinput_write_event(&info, &ev);
 	}
 	prev_btn_0 = btn_0;
 
@@ -118,14 +118,14 @@ void Tester::handleReport(int p, int x, int y, int z)
 		ev.code = BTN_1;
 		ev.value = btn_1;
 
-		//uinput_write_event(&info, &ev);
+		uinput_write_event(&info, &ev);
 	}
 	prev_btn_1 = btn_1;
 
 	ev.type = EV_ABS;
 	ev.code = ABS_PRESSURE;
 	ev.value = (p >> 5) & 0x7ff;
-	//uinput_write_event(&info, &ev);
+	uinput_write_event(&info, &ev);
 
 	qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
 }
