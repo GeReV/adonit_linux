@@ -19,6 +19,10 @@
 #include <config.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -156,5 +160,9 @@ int uinput_write_event(struct uinput_info *info, struct input_event *ev)
 	}
 	return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 /* vim: set noexpandtab tabstop=8 shiftwidth=8: */
