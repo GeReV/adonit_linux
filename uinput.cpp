@@ -140,7 +140,6 @@ int UInput::uinput_create(struct uinput_info *info)
 	//	goto err;
 
 	if (need_init) {
-		log(STD_ERR, "TEST: %d", info->fd);
 		retval = ioctl(info->fd, UI_DEV_CREATE);
 		if (retval == -1) {
 			perror("Unable to create uinput device: ");

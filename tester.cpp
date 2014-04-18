@@ -53,11 +53,13 @@ void Tester::handleConnected()
 
     info.create_mode = WDAEMON_CREATE;
 
-	qDebug() << uinput->uinput_create(&info);
-    qDebug() << uinput->wacom_set_events(&info);
-    qDebug() << uinput->wacom_set_initial_values(&info, &dev);
-	//	qDebug() << "Device created successfully!";
-	//}
+	if (uinput->uinput_create(&info)) {
+		if (uinput->wacom_set_events(&info)) {
+			if (uinput->wacom_set_initial_values(&info, &dev)) {
+				qDebug() << "Device created successfully!";
+			}
+		}
+	}
 }
 
 void Tester::handleDisconnected()
