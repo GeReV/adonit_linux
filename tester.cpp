@@ -2,6 +2,7 @@
 #include <gatodescriptor.h>
 
 #include "tester.h"
+#include "log.h"
 
 Tester::Tester(QObject *parent)
     : QObject(parent)
@@ -54,11 +55,7 @@ void Tester::handleConnected()
     info.create_mode = WDAEMON_CREATE;
 
 	if (uinput->uinput_create(&info)) {
-		if (uinput->wacom_set_events(&info)) {
-			if (uinput->wacom_set_initial_values(&info, &dev)) {
-				qDebug() << "Device created successfully!";
-			}
-		}
+		qDebug() << "Device created successfully!";
 	}
 }
 
