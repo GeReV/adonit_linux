@@ -6,6 +6,7 @@
 #include <gatoperipheral.h>
 #include <gatoservice.h>
 #include <gatocharacteristic.h>
+
 #include "uinput.h"
 
 class Tester : public QObject
@@ -32,6 +33,9 @@ private:
 	GatoCentralManager *manager;
 	GatoPeripheral *peripheral;
 	GatoCharacteristic agg_char;
+
+	UInput *uinput;
+
 	struct uinput_info info;
 	struct uinput_user_dev dev;
 

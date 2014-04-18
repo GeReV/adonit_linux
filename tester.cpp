@@ -2,7 +2,6 @@
 #include <gatodescriptor.h>
 
 #include "tester.h"
-#include "uinput.h"
 
 Tester::Tester(QObject *parent)
     : QObject(parent)
@@ -10,6 +9,8 @@ Tester::Tester(QObject *parent)
 	manager = new GatoCentralManager(this);
 	connect(manager, SIGNAL(discoveredPeripheral(GatoPeripheral*,int)),
 	        SLOT(handleDiscoveredPeripheral(GatoPeripheral*,int)));
+
+	uinput = new UInput();
 }
 
 Tester::~Tester()
@@ -21,6 +22,8 @@ Tester::~Tester()
 		}
 		peripheral->disconnectPeripheral();
 	}
+
+	delete uinput;
 }
 
 void Tester::test()
@@ -48,7 +51,7 @@ void Tester::handleConnected()
 	qDebug() << "Peripheral connected";
 	peripheral->discoverServices();
 
-	if (uinput_create(&info) && wacom_set_events(&info) && wacom_set_initial_values(&info, &dev)) {
+	if (uinput->uinput_create(&info) && uinput->wacom_set_events(&info) && uinput->wacom_set_initial_values(&info, &dev)) {
 		qDebug() << "Device created successfully!";
 	}
 }
@@ -109,7 +112,7 @@ void Tester::handleReport(int p, int x, int y, int z)
 		ev.code = BTN_0;
 		ev.value = btn_0;
 
-		uinput_write_event(&info, &ev);
+		uinput->uinput_write_event(&info, &ev);
 	}
 	prev_btn_0 = btn_0;
 
@@ -118,14 +121,14 @@ void Tester::handleReport(int p, int x, int y, int z)
 		ev.code = BTN_1;
 		ev.value = btn_1;
 
-		uinput_write_event(&info, &ev);
+		uinput->uinput_write_event(&info, &ev);
 	}
 	prev_btn_1 = btn_1;
 
 	ev.type = EV_ABS;
 	ev.code = ABS_PRESSURE;
 	ev.value = (p >> 5) & 0x7ff;
-	uinput_write_event(&info, &ev);
+	uinput->uinput_write_event(&info, &ev);
 
 	qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
 }

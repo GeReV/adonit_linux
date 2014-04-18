@@ -39,11 +39,16 @@ struct uinput_info {
 	void *priv;
 	enum create_type create_mode;
 };
-int uinput_create(struct uinput_info *info);
-int uinput_write_dev(struct uinput_info *info, struct uinput_user_dev *dev);
-int uinput_write_event(struct uinput_info *info, struct input_event *ev);
-static int wacom_set_events(struct uinput_info *info);
-static int wacom_set_initial_values(struct uinput_info *info, struct uinput_user_dev *dev);
+
+class UInput {
+public:
+	int uinput_create(struct uinput_info *info);
+	int uinput_write_dev(struct uinput_info *info, struct uinput_user_dev *dev);
+	int uinput_write_event(struct uinput_info *info, struct input_event *ev);
+	int wacom_set_events(struct uinput_info *info);
+	int wacom_set_initial_values(struct uinput_info *info, struct uinput_user_dev *dev);
+};
+
 #endif	/* UINPUT_H */
 
 /* vim: set noexpandtab tabstop=8 shiftwidth=8: */

@@ -19,10 +19,6 @@
 #include <config.h>
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -40,8 +36,19 @@ extern "C" {
 #define UINPUT_DEVICE "/dev/uinput"
 #endif
 
-static int wacom_set_events(struct uinput_info *info)
-{
+#define USB_VENDOR_ID_WACOM 0x056a
+#ifndef BUS_VIRTUAL
+#define BUS_VIRTUAL 6
+#endif
+
+#define set_event(x, y, z) do { if (ioctl((x)->fd, (y), (z)) == -1) { \
+					log(LOG_ERR, "Error enabling %s (%s)\n", \
+					    #z, strerror(errno)); \
+					return 1; \
+				} \
+			} while(0)
+
+int UInput::wacom_set_events(struct uinput_info *info) {
 	/* common */
 	set_event(info, UI_SET_EVBIT, EV_KEY);
 	set_event(info, UI_SET_EVBIT, EV_ABS);
@@ -53,11 +60,8 @@ static int wacom_set_events(struct uinput_info *info)
 
 	return 0;
 }
-#define USB_VENDOR_ID_WACOM 0x056a
-#ifndef BUS_VIRTUAL
-#define BUS_VIRTUAL 6
-#endif
-static int wacom_set_initial_values(struct uinput_info *info,
+
+int UInput::wacom_set_initial_values(struct uinput_info *info,
 				     struct uinput_user_dev *dev)
 {
 	snprintf(dev->name, sizeof(dev->name),
@@ -75,7 +79,7 @@ static int wacom_set_initial_values(struct uinput_info *info,
 	return uinput_write_dev(info, dev);
 }
 
-int uinput_write_dev(struct uinput_info *info,
+int UInput::uinput_write_dev(struct uinput_info *info,
 		     struct uinput_user_dev *dev)
 {
 	int rc = 1;
@@ -97,7 +101,7 @@ err:
 	return rc;
 }
 
-int uinput_create(struct uinput_info *info)
+int UInput::uinput_create(struct uinput_info *info)
 {
 	struct uinput_user_dev dev;
 	char file[50], *tmp;
@@ -151,7 +155,7 @@ err:
 	goto out;
 }
 
-int uinput_write_event(struct uinput_info *info, struct input_event *ev)
+int UInput::uinput_write_event(struct uinput_info *info, struct input_event *ev)
 {
 	if (write(info->fd, ev, sizeof(struct input_event)) !=
 						sizeof(struct input_event)) {
@@ -160,9 +164,5 @@ int uinput_write_event(struct uinput_info *info, struct input_event *ev)
 	}
 	return 0;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 /* vim: set noexpandtab tabstop=8 shiftwidth=8: */
