@@ -64,10 +64,7 @@ int UInput::wacom_set_events(struct uinput_info *info) {
 int UInput::wacom_set_initial_values(struct uinput_info *info,
 				     struct uinput_user_dev *dev)
 {
-	snprintf(dev->name, sizeof(dev->name),
-		 "%s%s%s", info->name,
-		 (strlen(info->name) > 0) ? ": " : "",
-		 "Adonit");
+	strcpy(dev->name, "Wacom: Wacom Bamboo");
 	dev->id.bustype = BUS_VIRTUAL;
 	dev->id.vendor = USB_VENDOR_ID_WACOM;
 	dev->id.product = 0;
