@@ -7,12 +7,21 @@
 Tester::Tester(QObject *parent)
     : QObject(parent)
 {
+    printf("Hello.\n");
+
 	manager = new GatoCentralManager(this);
 	connect(manager, SIGNAL(discoveredPeripheral(GatoPeripheral*,int)),
 	        SLOT(handleDiscoveredPeripheral(GatoPeripheral*,int)));
 
+    fd = open("/dev/input/event14", O_RDONLY | O_NONBLOCK);
+    printf("File: %d\n", fd);
+
+    int grab = 1;
+    ioctl(fd, EVIOCGRAB, &grab);
+
 	uinput = new UInput();
-}
+
+    }
 
 Tester::~Tester()
 {
@@ -23,6 +32,10 @@ Tester::~Tester()
 		}
 		peripheral->disconnectPeripheral();
 	}
+
+    ioctl(fd, EVIOCGRAB, NULL);
+
+    close(fd);
 
 	delete uinput;
 }
@@ -57,7 +70,8 @@ void Tester::handleConnected()
 	if (uinput->uinput_create(&info)) {
 		qDebug() << "Device created successfully!";
 	}
-}
+
+    }
 
 void Tester::handleDisconnected()
 {
@@ -133,5 +147,55 @@ void Tester::handleReport(int p, int x, int y, int z)
 	ev.value = (p >> 5) & 0x7ff;
 	uinput->uinput_write_event(&info, &ev);
 
-	qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
+    //qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
+    //prointf("Reading...\n");
+//    while (1) {
+        ssize_t size = read(fd, &event, sizeof(struct input_event));
+        while(size > 0) {
+            struct input_event ev;
+            printf("%d %i %i %i\n", event.time, event.type, event.code, event.value);
+            if (event.type == 0) {
+                printf("PACK %i %i\n", event.code, event.value);
+            } else if (event.type == EV_KEY) {
+                if (event.code == BTN_TOUCH) {
+                    event.code = BTN_TOOL_PEN;
+                }
+                printf("EV_KEY code=%i value=%i\n", event.code, event.value);
+
+                gettimeofday(&ev.time, 0);
+                ev.type = EV_KEY;
+                ev.code = event.code;
+                ev.value = event.value;
+
+                uinput->uinput_write_event(&info, &ev);
+            } else if (event.type == EV_ABS) {
+                printf("EV_ABS code=%i value=%i\n", event.code, event.value);
+
+                gettimeofday(&ev.time, 0);
+
+                ev.type = EV_ABS;
+
+                if (event.code == ABS_X || event.code == ABS_Y) {
+                    ev.code = event.code;
+                    ev.value = event.value;
+                }
+
+                uinput->uinput_write_event(&info, &ev);
+            }
+
+            size = read(fd, &event, sizeof(struct input_event));
+
+            //qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
+        }
+
+    ev.type = EV_SYN;
+    ev.code = SYN_REPORT;
+    ev.value = 0;
+
+    uinput->uinput_write_event(&info, &ev);
+
+//    }
+    //printf("Done.\n");
+
+
 }

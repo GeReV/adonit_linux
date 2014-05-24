@@ -8,6 +8,11 @@
 #include <gatocharacteristic.h>
 
 #include "uinput.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
 
 class Tester : public QObject
 {
@@ -38,6 +43,9 @@ private:
 
 	struct uinput_info info;
 	struct uinput_user_dev dev;
+
+    int fd;
+    struct input_event event;
 
 	int prev_btn_0;
 	int prev_btn_1;

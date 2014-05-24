@@ -55,8 +55,12 @@ int UInput::wacom_set_events(struct uinput_info *info) {
 
 	set_event(info, UI_SET_KEYBIT, BTN_0);
 	set_event(info, UI_SET_KEYBIT, BTN_1);
+	set_event(info, UI_SET_KEYBIT, BTN_TOOL_PEN);
+	set_event(info, UI_SET_KEYBIT, BTN_TOUCH);
 
 	set_event(info, UI_SET_ABSBIT, ABS_PRESSURE);
+	set_event(info, UI_SET_ABSBIT, ABS_X);
+	set_event(info, UI_SET_ABSBIT, ABS_Y);
 
 	return 0;
 }
@@ -72,6 +76,12 @@ int UInput::wacom_set_initial_values(struct uinput_info *info,
 
 	/* common */
 	dev->absmax[ABS_PRESSURE] = 2048;
+	dev->absmax[ABS_X] = 4096;
+	dev->absmax[ABS_Y] = 4096;
+
+	dev->absmin[ABS_PRESSURE] = 0;
+	dev->absmin[ABS_X] = 0;
+	dev->absmin[ABS_Y] = 0;
 
 	return uinput_write_dev(info, dev);
 }
