@@ -1,8 +1,7 @@
 /****************************************************************************
 ** Meta object code from reading C++ file 'tester.h'
 **
-** Created: Fri Apr 18 05:03:23 2014
-**      by: The Qt Meta Object Compiler version 63 (Qt 4.8.4)
+** Created by: The Qt Meta Object Compiler version 63 (Qt 4.8.6)
 **
 ** WARNING! All changes made in this file will be lost!
 *****************************************************************************/
@@ -11,7 +10,7 @@
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'tester.h' doesn't include <QObject>."
 #elif Q_MOC_OUTPUT_REVISION != 63
-#error "This file was generated using the moc from 4.8.4. It"
+#error "This file was generated using the moc from 4.8.6. It"
 #error "cannot be used with the include files from this version of Qt."
 #error "(The moc has changed too much.)"
 #endif
@@ -23,7 +22,7 @@ static const uint qt_meta_data_Tester[] = {
        6,       // revision
        0,       // classname
        0,    0, // classinfo
-       8,   14, // methods
+      12,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -39,6 +38,10 @@ static const uint qt_meta_data_Tester[] = {
      143,  135,    7,    7, 0x08,
      199,  178,    7,    7, 0x08,
      257,  249,    7,    7, 0x08,
+     287,    7,    7,    7, 0x08,
+     313,    7,    7,    7, 0x08,
+     336,    7,    7,    7, 0x08,
+     371,  361,    7,    7, 0x08,
 
        0        // eod
 };
@@ -52,6 +55,9 @@ static const char qt_meta_stringdata_Tester[] = {
     "characteristic,value\0"
     "handleValueUpdated(GatoCharacteristic,QByteArray)\0"
     "p,x,y,z\0handleReport(int,int,int,int)\0"
+    "discoverBluetoothDevice()\0"
+    "closeBluetoothDevice()\0connectBluetoothDevice()\0"
+    "info,rssi\0handleAdvertising(le_advertising_info*,int)\0"
 };
 
 void Tester::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
@@ -68,6 +74,10 @@ void Tester::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void
         case 5: _t->handleCharacteristics((*reinterpret_cast< const GatoService(*)>(_a[1]))); break;
         case 6: _t->handleValueUpdated((*reinterpret_cast< const GatoCharacteristic(*)>(_a[1])),(*reinterpret_cast< const QByteArray(*)>(_a[2]))); break;
         case 7: _t->handleReport((*reinterpret_cast< int(*)>(_a[1])),(*reinterpret_cast< int(*)>(_a[2])),(*reinterpret_cast< int(*)>(_a[3])),(*reinterpret_cast< int(*)>(_a[4]))); break;
+        case 8: _t->discoverBluetoothDevice(); break;
+        case 9: _t->closeBluetoothDevice(); break;
+        case 10: _t->connectBluetoothDevice(); break;
+        case 11: _t->handleAdvertising((*reinterpret_cast< le_advertising_info*(*)>(_a[1])),(*reinterpret_cast< int(*)>(_a[2]))); break;
         default: ;
         }
     }
@@ -105,9 +115,9 @@ int Tester::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 8)
+        if (_id < 12)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 8;
+        _id -= 12;
     }
     return _id;
 }

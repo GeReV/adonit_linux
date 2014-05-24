@@ -1,17 +1,23 @@
 #include <QtCore/QDebug>
 #include <gatodescriptor.h>
 
+
+
 #include "tester.h"
 #include "log.h"
+
+#define ATT_CID 4
 
 Tester::Tester(QObject *parent)
     : QObject(parent)
 {
     printf("Hello.\n");
 
-	manager = new GatoCentralManager(this);
-	connect(manager, SIGNAL(discoveredPeripheral(GatoPeripheral*,int)),
-	        SLOT(handleDiscoveredPeripheral(GatoPeripheral*,int)));
+//	manager = new GatoCentralManager(this);
+//	connect(mmanager, SIGNAL(discoveredPeripheral(GatoPeripheral*,int)),
+//	        SLOT(handleDiscoveredPeripheral(GatoPeripheral*,int)));
+
+	discoverBluetoothDevice();
 
     fd = open("/dev/input/event14", O_RDONLY | O_NONBLOCK);
     printf("File: %d\n", fd);
@@ -21,7 +27,7 @@ Tester::Tester(QObject *parent)
 
 	uinput = new UInput();
 
-    }
+}
 
 Tester::~Tester()
 {
@@ -39,6 +45,220 @@ Tester::~Tester()
 
 	delete uinput;
 }
+
+void Tester::closeBluetoothDevice() {
+	hci_close_dev(hci);
+	hci = -1;
+}
+
+void Tester::discoverBluetoothDevice() {
+
+	int rc;
+
+	dev_id = hci_get_route(NULL);
+	hci = hci_open_dev(dev_id);
+
+	if (hci == -1) {
+		qErrnoWarning("Could not open device");
+		return;
+	}
+
+	hci_le_set_scan_enable(hci, 0, 0, timeout);
+
+	rc = hci_le_set_scan_parameters(hci, 1,
+									htobs(0x0010), htobs(0x0010),
+									0 /* Public address */,
+									0 /* No filter ? */,
+									timeout);
+	if (rc < 0) {
+		printf("LE Set scan parameters failed");
+		closeBluetoothDevice();
+		return;
+	}
+
+	rc = hci_le_set_scan_enable(hci, 1, 1, timeout);
+
+	if (rc < 0) {
+		printf("LE Set scan enable failed");
+		closeBluetoothDevice();
+		return;
+	}
+
+	socklen_t olen = sizeof(hci_of);
+	if (getsockopt(hci, SOL_HCI, HCI_FILTER, &hci_of, &olen) < 0) {
+		qErrnoWarning("Could not get existing HCI socket options");
+		return;
+	}
+
+	hci_filter_clear(&hci_nf);
+	hci_filter_set_ptype(HCI_EVENT_PKT, &hci_nf);
+	hci_filter_set_event(EVT_LE_META_EVENT, &hci_nf);
+
+	if (setsockopt(hci, SOL_HCI, HCI_FILTER, &hci_nf, sizeof(hci_nf)) < 0) {
+		printf("Could not set HCI socket options");
+		return;
+	}
+
+	connectBluetoothDevice();
+}
+
+void Tester::connectBluetoothDevice() {
+	unsigned char buf[HCI_MAX_EVENT_SIZE];
+
+	// Read a full event
+	int len;
+	if ((len = read(hci, buf, sizeof(buf))) < 0) {
+		if (errno != EAGAIN && errno != EINTR) {
+			printf("Could not read HCI events");
+		}
+		return; // Will be notified later, probably.
+	}
+
+	int pos = HCI_EVENT_HDR_SIZE + 1;
+	assert(pos < len);
+	evt_le_meta_event *meta = reinterpret_cast<evt_le_meta_event*>(&buf[pos]);
+
+
+	if (meta->subevent == EVT_LE_ADVERTISING_REPORT) {
+		pos++; // Skip subevent field
+		int num_reports = buf[pos];
+		pos++; // Skip num_reports field
+
+		assert(pos < len);
+
+		while (num_reports > 0) {
+			le_advertising_info *info = reinterpret_cast<le_advertising_info*>(&buf[pos]);
+			assert(pos + LE_ADVERTISING_INFO_SIZE < len);
+			assert(pos + LE_ADVERTISING_INFO_SIZE + info->length < len);
+			int8_t *rssi = reinterpret_cast<int8_t*>(&buf[pos + LE_ADVERTISING_INFO_SIZE + info->length]);
+
+			handleAdvertising(info, *rssi);
+
+			pos += LE_ADVERTISING_INFO_SIZE + info->length + 1;
+			num_reports--;
+		}
+	}
+}
+
+void Tester::handleAdvertising(le_advertising_info *info, int rssi) {
+	qDebug() << "Advertising event type" << info->evt_type
+			 << "address type" << info->bdaddr_type
+			 << "data length" << info->length
+			 << "rssi" << rssi;
+
+	hci_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+	if (hci_fd == -1) {
+		qErrnoWarning("Could not create L2CAP socket");
+		return;
+	}
+
+	struct sockaddr_l2 l2addr;
+	memset(&l2addr, 0, sizeof(l2addr));
+
+	l2addr.l2_family = AF_BLUETOOTH;
+	l2addr.l2_cid = htobs(ATT_CID);
+#ifdef BDADDR_LE_PUBLIC
+	l2addr.l2_bdaddr_type = BDADDR_LE_PUBLIC; // TODO
+#endif
+	l2addr.l2_bdaddr = info->bdaddr;
+
+	int err = ::connect(hci_fd, reinterpret_cast<sockaddr*>(&l2addr), sizeof(l2addr));
+	if (err == -1 && errno != EINPROGRESS) {
+		qErrnoWarning("Could not connect to L2CAP socket");
+		hci_fd = -1;
+		return;
+	}
+
+	if (info->length > 0) {
+
+		printf("We have things to parse!");
+		//peripheral->parseEIR(info->data, info->length);
+	}
+
+	//uint8_t address[6] = info->bdaddr.b;
+
+	/*GatoPeripheral *peripheral;
+
+	QHash<GatoAddress, GatoPeripheral*>::iterator it = peripherals.find(addr);
+
+	if (it == peripherals.end()) {
+		peripheral = new GatoPeripheral(addr, q);
+		peripherals.insert(addr, peripheral);
+	} else {
+		peripheral = *it;
+	}
+
+	if (info->length > 0) {
+		peripheral->parseEIR(info->data, info->length);
+	}
+
+	bool passes_filter;
+	if (filter_uuids.isEmpty()) {
+		passes_filter = true;
+	} else {
+		passes_filter = false;
+		foreach (const GatoUUID & filter_uuid, filter_uuids) {
+			if (peripheral->advertisesService(filter_uuid)) {
+				passes_filter = true;
+				break;
+			}
+		}
+	}
+
+	if (passes_filter) {
+		handleDiscoveredPeripheral(peripheral, rssi);
+	}*/
+}
+
+//void GatoPeripheral::parseEIR(quint8 data[], int len)
+//{
+//	Q_D(GatoPeripheral);
+//
+//	int pos = 0;
+//	while (pos < len) {
+//		int item_len = data[pos];
+//		pos++;
+//		if (item_len == 0) break;
+//		int type = data[pos];
+//		assert(pos + item_len <= len);
+//		switch (type) {
+//		case EIRFlags:
+//			d->parseEIRFlags(&data[pos + 1], item_len - 1);
+//			break;
+//		case EIRIncompleteUUID16List:
+//			d->parseEIRUUIDs(16/8, false, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRCompleteUUID16List:
+//			d->parseEIRUUIDs(16/8, true, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRIncompleteUUID32List:
+//			d->parseEIRUUIDs(32/8, false, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRCompleteUUID32List:
+//			d->parseEIRUUIDs(32/8, true, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRIncompleteUUID128List:
+//			d->parseEIRUUIDs(128/8, false, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRCompleteUUID128List:
+//			d->parseEIRUUIDs(128/8, true, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRIncompleteLocalName:
+//			d->parseName(false, &data[pos + 1], item_len - 1);
+//			break;
+//		case EIRCompleteLocalName:
+//			d->parseName(true, &data[pos + 1], item_len - 1);
+//			break;
+//		default:
+//			qWarning() << "Unknown EIR data type" << type;
+//			break;
+//		}
+//
+//		pos += item_len;
+//	}
+//
+//	assert(pos == len);
+//}
 
 void Tester::test()
 {

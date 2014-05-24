@@ -7,12 +7,19 @@
 #include <gatoservice.h>
 #include <gatocharacteristic.h>
 
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
+#include <bluetooth/hci_lib.h>
+#include <bluetooth/l2cap.h>
+
 #include "uinput.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
+#include <assert.h>
 
 class Tester : public QObject
 {
@@ -34,6 +41,11 @@ private slots:
 	void handleValueUpdated(const GatoCharacteristic &characteristic, const QByteArray &value);
 	void handleReport(int p, int x, int y, int z);
 
+	void discoverBluetoothDevice();
+	void closeBluetoothDevice();
+	void connectBluetoothDevice();
+	void handleAdvertising(le_advertising_info *info, int rssi);
+
 private:
 	GatoCentralManager *manager;
 	GatoPeripheral *peripheral;
@@ -43,6 +55,12 @@ private:
 
 	struct uinput_info info;
 	struct uinput_user_dev dev;
+
+	int dev_id;
+	int hci = -1;
+	int hci_fd = -1;
+	int timeout = 1000;
+	hci_filter hci_nf, hci_of;
 
     int fd;
     struct input_event event;
