@@ -13,7 +13,7 @@ Tester::Tester(QObject *parent)
 	connect(manager, SIGNAL(discoveredPeripheral(GatoPeripheral*,int)),
 	        SLOT(handleDiscoveredPeripheral(GatoPeripheral*,int)));
 
-    fd = open("/dev/input/event14", O_RDONLY | O_NONBLOCK);
+    fd = open("/dev/input/event12", O_RDONLY | O_NONBLOCK);
     printf("File: %d\n", fd);
 
     int grab = 1;
@@ -48,7 +48,7 @@ void Tester::test()
 void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi)
 {
 	qDebug() << "Found peripheral" << peripheral->address().toString() << peripheral->name();
-//	if (peripheral->name() == "JN104FE9") {
+	if (peripheral->name()[0] == 'J') {
 		manager->stopScan();
 		this->peripheral = peripheral;
 		connect(peripheral, SIGNAL(connected()), SLOT(handleConnected()));
@@ -57,7 +57,7 @@ void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi)
 		connect(peripheral, SIGNAL(characteristicsDiscovered(GatoService)), SLOT(handleCharacteristics(GatoService)));
 		connect(peripheral, SIGNAL(valueUpdated(GatoCharacteristic,QByteArray)), SLOT(handleValueUpdated(GatoCharacteristic,QByteArray)));
 		peripheral->connectPeripheral();
-//	}
+	}
 }
 
 void Tester::handleConnected()
@@ -154,7 +154,7 @@ void Tester::handleReport(int p, int x, int y, int z)
         while(size > 0) {
             struct input_event ev;
             printf("%d %i %i %i\n", event.time, event.type, event.code, event.value);
-            if (event.type == 0) {
+            if (event.type == EV_SYN) {
                 printf("PACK %i %i\n", event.code, event.value);
             } else if (event.type == EV_KEY) {
                 if (event.code == BTN_TOUCH) {
@@ -178,9 +178,10 @@ void Tester::handleReport(int p, int x, int y, int z)
                 if (event.code == ABS_X || event.code == ABS_Y) {
                     ev.code = event.code;
                     ev.value = event.value;
+
+                    uinput->uinput_write_event(&info, &ev);
                 }
 
-                uinput->uinput_write_event(&info, &ev);
             }
 
             size = read(fd, &event, sizeof(struct input_event));
