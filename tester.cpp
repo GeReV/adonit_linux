@@ -131,6 +131,9 @@ void Tester::connectBluetoothDevice() {
 		return; // Will be notified later, probably.
 	}
 
+    
+    printf("%.*x", len, buf);
+
 	int pos = HCI_EVENT_HDR_SIZE + 1;
 	assert(pos < len);
 	evt_le_meta_event *meta = reinterpret_cast<evt_le_meta_event*>(&buf[pos]);
@@ -169,7 +172,7 @@ void Tester::handleAdvertising(le_advertising_info *info, int rssi) {
 	}
 
 	if (name[0] != 'J') {
-		printf("Found incorrect device: %s", name);
+		printf("Found incorrect device: %s", name.c_str());
 		return;
 	}
 
@@ -311,18 +314,18 @@ void Tester::parseEIRUUIDs(int size, bool complete, uint8_t data[], int len)
 	for (int pos = 0; pos < len; pos += size) {
 		bt_uuid_t uuid;
 		switch (size) {
-		case 16/8:
-			uuid = bt_uuid16_create(&uuid, fromLittleEndian<uint16>(&data[pos]).u);
-			break;
-		case 32/8:
-			uuid = bt_uuid32_create(&uuid, fromLittleEndian<uint32>(&data[pos]).u);
-			break;
+        case 16/8:
+			//uuid = bt_uuid16_create(&uuid, fromLittleEndian<uint16>(&data[pos]).u);
+            break;
+        case 32/8:
+			//uuid = bt_uuid32_create(&uuid, fromLittleEndian<uint32>(&data[pos]).u);
+            break;
 		case 128/8:
-			uuid = bt_uuid128_create(&uuid, fromLittleEndian<uint128>(&data[pos]).u);
+			//uuid = bt_uuid128_create(&uuid, fromLittleEndian<uint128>(&data[pos]).u);
 			break;
 		}
 
-		service_uuids.insert(uuid);
+		service_uuids.push_back(uuid);
 	}
 }
 
@@ -334,6 +337,13 @@ void Tester::parseName(bool complete, uint8_t data[], int len)
 	}
 }
 
+void Tester::handleConnected() {
+
+}
+
+void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi) {
+
+}
 void Tester::test()
 {
 	manager->scanForPeripherals();

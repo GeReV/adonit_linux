@@ -38,6 +38,7 @@ public slots:
 private slots:
 	void handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi);
 	void handleDisconnected();
+	void handleConnected();
 	void handleServices();
 	void handleCharacteristics(const GatoService &service);
 	void handleValueUpdated(const GatoCharacteristic &characteristic, const QByteArray &value);
