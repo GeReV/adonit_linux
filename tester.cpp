@@ -1,12 +1,25 @@
-#include <QtCore/QDebug>
 #include <gatodescriptor.h>
-
-
 
 #include "tester.h"
 #include "log.h"
 
 #define ATT_CID 4
+
+enum EIRDataFields {
+	EIRFlags = 0x01,
+	EIRIncompleteUUID16List = 0x02,
+	EIRCompleteUUID16List = 0x03,
+	EIRIncompleteUUID32List = 0x04,
+	EIRCompleteUUID32List = 0x05,
+	EIRIncompleteUUID128List = 0x06,
+	EIRCompleteUUID128List = 0x07,
+	EIRIncompleteLocalName = 0x08,
+	EIRCompleteLocalName = 0x09,
+	EIRTxPowerLevel = 0x0A,
+	EIRDeviceClass = 0x0D,
+	EIRSecurityManagerTKValue = 0x10,
+	EIRSecurityManagerOutOfBandFlags = 0x11
+};
 
 Tester::Tester(QObject *parent)
     : QObject(parent)
@@ -43,6 +56,10 @@ Tester::~Tester()
 
     close(fd);
 
+    if (hci_fd != -1) {
+    	close(hci_fd);
+    }
+
 	delete uinput;
 }
 
@@ -59,7 +76,7 @@ void Tester::discoverBluetoothDevice() {
 	hci = hci_open_dev(dev_id);
 
 	if (hci == -1) {
-		qErrnoWarning("Could not open device");
+		printf("Could not open device");
 		return;
 	}
 
@@ -86,7 +103,7 @@ void Tester::discoverBluetoothDevice() {
 
 	socklen_t olen = sizeof(hci_of);
 	if (getsockopt(hci, SOL_HCI, HCI_FILTER, &hci_of, &olen) < 0) {
-		qErrnoWarning("Could not get existing HCI socket options");
+		printf("Could not get existing HCI socket options");
 		return;
 	}
 
@@ -141,39 +158,22 @@ void Tester::connectBluetoothDevice() {
 }
 
 void Tester::handleAdvertising(le_advertising_info *info, int rssi) {
-	qDebug() << "Advertising event type" << info->evt_type
-			 << "address type" << info->bdaddr_type
-			 << "data length" << info->length
-			 << "rssi" << rssi;
-
-	hci_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-	if (hci_fd == -1) {
-		qErrnoWarning("Could not create L2CAP socket");
-		return;
-	}
-
-	struct sockaddr_l2 l2addr;
-	memset(&l2addr, 0, sizeof(l2addr));
-
-	l2addr.l2_family = AF_BLUETOOTH;
-	l2addr.l2_cid = htobs(ATT_CID);
-#ifdef BDADDR_LE_PUBLIC
-	l2addr.l2_bdaddr_type = BDADDR_LE_PUBLIC; // TODO
-#endif
-	l2addr.l2_bdaddr = info->bdaddr;
-
-	int err = ::connect(hci_fd, reinterpret_cast<sockaddr*>(&l2addr), sizeof(l2addr));
-	if (err == -1 && errno != EINPROGRESS) {
-		qErrnoWarning("Could not connect to L2CAP socket");
-		hci_fd = -1;
-		return;
-	}
+//	qDebug() << "Advertising event type" << info->evt_type
+//			 << "address type" << info->bdaddr_type
+//			 << "data length" << info->length
+//			 << "rssi" << rssi;
 
 	if (info->length > 0) {
-
 		printf("We have things to parse!");
-		//peripheral->parseEIR(info->data, info->length);
+		parseEIR(info->data, info->length);
 	}
+
+	if (name[0] != 'J') {
+		printf("Found incorrect device: %s", name);
+		return;
+	}
+
+	connect(info);
 
 	//uint8_t address[6] = info->bdaddr.b;
 
@@ -210,101 +210,147 @@ void Tester::handleAdvertising(le_advertising_info *info, int rssi) {
 	}*/
 }
 
-//void GatoPeripheral::parseEIR(quint8 data[], int len)
-//{
-//	Q_D(GatoPeripheral);
+void Tester::connect(le_advertising_info *info) {
+	//manager->stopScan();
+	//this->peripheral = peripheral;
+	/*connect(peripheral, SIGNAL(connected()), SLOT(handleConnected()));
+	connect(peripheral, SIGNAL(disconnected()), SLOT(handleDisconnected()));
+	connect(peripheral, SIGNAL(servicesDiscovered()), SLOT(handleServices()));
+	connect(peripheral, SIGNAL(characteristicsDiscovered(GatoService)), SLOT(handleCharacteristics(GatoService)));
+	connect(peripheral, SIGNAL(valueUpdated(GatoCharacteristic,QByteArray)), SLOT(handleValueUpdated(GatoCharacteristic,QByteArray)));*/
+
+	hci_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+	if (hci_fd == -1) {
+		printf("Could not create L2CAP socket");
+		return;
+	}
+
+	struct sockaddr_l2 l2addr;
+	memset(&l2addr, 0, sizeof(l2addr));
+
+	l2addr.l2_family = AF_BLUETOOTH;
+	l2addr.l2_cid = htobs(ATT_CID);
+#ifdef BDADDR_LE_PUBLIC
+	l2addr.l2_bdaddr_type = BDADDR_LE_PUBLIC; // TODO
+#endif
+	l2addr.l2_bdaddr = info->bdaddr;
+
+	int err = ::connect(hci_fd, reinterpret_cast<sockaddr*>(&l2addr), sizeof(l2addr));
+	if (err == -1 && errno != EINPROGRESS) {
+		printf("Could not connect to L2CAP socket");
+		hci_fd = -1;
+		return;
+	}
+
+	printf("Connected!");
+
+	//discoverServices();
+
+//	this->info.create_mode = WDAEMON_CREATE;
 //
-//	int pos = 0;
-//	while (pos < len) {
-//		int item_len = data[pos];
-//		pos++;
-//		if (item_len == 0) break;
-//		int type = data[pos];
-//		assert(pos + item_len <= len);
-//		switch (type) {
-//		case EIRFlags:
-//			d->parseEIRFlags(&data[pos + 1], item_len - 1);
-//			break;
-//		case EIRIncompleteUUID16List:
-//			d->parseEIRUUIDs(16/8, false, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRCompleteUUID16List:
-//			d->parseEIRUUIDs(16/8, true, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRIncompleteUUID32List:
-//			d->parseEIRUUIDs(32/8, false, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRCompleteUUID32List:
-//			d->parseEIRUUIDs(32/8, true, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRIncompleteUUID128List:
-//			d->parseEIRUUIDs(128/8, false, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRCompleteUUID128List:
-//			d->parseEIRUUIDs(128/8, true, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRIncompleteLocalName:
-//			d->parseName(false, &data[pos + 1], item_len - 1);
-//			break;
-//		case EIRCompleteLocalName:
-//			d->parseName(true, &data[pos + 1], item_len - 1);
-//			break;
-//		default:
-//			qWarning() << "Unknown EIR data type" << type;
-//			break;
-//		}
-//
-//		pos += item_len;
+//	if (uinput->uinput_create(&this->info)) {
+//		qDebug() << "Device created successfully!";
 //	}
-//
-//	assert(pos == len);
+}
+
+void Tester::parseEIR(uint8_t data[], int len)
+{
+	int pos = 0;
+	while (pos < len) {
+		int item_len = data[pos];
+		pos++;
+		if (item_len == 0) break;
+		int type = data[pos];
+		assert(pos + item_len <= len);
+		switch (type) {
+		case EIRFlags:
+//			parseEIRFlags(&data[pos + 1], item_len - 1);
+			break;
+		case EIRIncompleteUUID16List:
+			parseEIRUUIDs(16/8, false, &data[pos + 1], item_len - 1);
+			break;
+		case EIRCompleteUUID16List:
+			parseEIRUUIDs(16/8, true, &data[pos + 1], item_len - 1);
+			break;
+		case EIRIncompleteUUID32List:
+			parseEIRUUIDs(32/8, false, &data[pos + 1], item_len - 1);
+			break;
+		case EIRCompleteUUID32List:
+			parseEIRUUIDs(32/8, true, &data[pos + 1], item_len - 1);
+			break;
+		case EIRIncompleteUUID128List:
+			parseEIRUUIDs(128/8, false, &data[pos + 1], item_len - 1);
+			break;
+		case EIRCompleteUUID128List:
+			parseEIRUUIDs(128/8, true, &data[pos + 1], item_len - 1);
+			break;
+		case EIRIncompleteLocalName:
+			parseName(false, &data[pos + 1], item_len - 1);
+			break;
+		case EIRCompleteLocalName:
+			parseName(true, &data[pos + 1], item_len - 1);
+			break;
+		default:
+			printf("Unknown EIR data type %d", type);
+			break;
+		}
+
+		pos += item_len;
+	}
+
+	assert(pos == len);
+}
+
+//void parseEIRFlags(quint8 data[], int len)
+//{
+//	// Nothing to do for now.
 //}
+
+void Tester::parseEIRUUIDs(int size, bool complete, uint8_t data[], int len)
+{
+	for (int pos = 0; pos < len; pos += size) {
+		bt_uuid_t uuid;
+		switch (size) {
+		case 16/8:
+			uuid = bt_uuid16_create(&uuid, fromLittleEndian<uint16>(&data[pos]).u);
+			break;
+		case 32/8:
+			uuid = bt_uuid32_create(&uuid, fromLittleEndian<uint32>(&data[pos]).u);
+			break;
+		case 128/8:
+			uuid = bt_uuid128_create(&uuid, fromLittleEndian<uint128>(&data[pos]).u);
+			break;
+		}
+
+		service_uuids.insert(uuid);
+	}
+}
+
+void Tester::parseName(bool complete, uint8_t data[], int len)
+{
+	if (complete || !complete_name) {
+		name = std::string(reinterpret_cast<char*>(data), static_cast<size_t>(len));
+		complete_name = complete;
+	}
+}
 
 void Tester::test()
 {
 	manager->scanForPeripherals();
 }
 
-void Tester::handleDiscoveredPeripheral(GatoPeripheral *peripheral, int rssi)
-{
-	qDebug() << "Found peripheral" << peripheral->address().toString() << peripheral->name();
-	if (peripheral->name()[0] == 'J') {
-		manager->stopScan();
-		this->peripheral = peripheral;
-		connect(peripheral, SIGNAL(connected()), SLOT(handleConnected()));
-		connect(peripheral, SIGNAL(disconnected()), SLOT(handleDisconnected()));
-		connect(peripheral, SIGNAL(servicesDiscovered()), SLOT(handleServices()));
-		connect(peripheral, SIGNAL(characteristicsDiscovered(GatoService)), SLOT(handleCharacteristics(GatoService)));
-		connect(peripheral, SIGNAL(valueUpdated(GatoCharacteristic,QByteArray)), SLOT(handleValueUpdated(GatoCharacteristic,QByteArray)));
-		peripheral->connectPeripheral();
-	}
-}
-
-void Tester::handleConnected()
-{
-	qDebug() << "Peripheral connected";
-	peripheral->discoverServices();
-
-    info.create_mode = WDAEMON_CREATE;
-
-	if (uinput->uinput_create(&info)) {
-		qDebug() << "Device created successfully!";
-	}
-
-    }
-
 void Tester::handleDisconnected()
 {
-	qDebug() << "Peripheral disconnected";
+	printf("Peripheral disconnected");
 }
 
 void Tester::handleServices()
 {
-	qDebug() << "Services found";
+	printf("Services found");
 	foreach (const GatoService &service, peripheral->services()) {
 		if (service.uuid() == GatoUUID("dcd68980-aadc-11e1-a22a-0002a5d5c51b")) {
 			// Found the service we want
-			qDebug() << "Found service!";
+			printf("Found service!");
 			peripheral->discoverCharacteristics(service);
 		}
 	}
