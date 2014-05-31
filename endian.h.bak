@@ -1,0 +1,84 @@
+#include <sys/types.h>
+
+#include <QtCore/QObject>
+union uint128
+{
+	uint8_t data[16];
+	uint128_t u;
+};
+
+union uint32
+{
+	uint8_t data[4];
+	uint32_t u;
+};
+
+union uint16
+{
+	uint8_t data[2];
+	uint16_t u;
+};
+
+template<>
+inline uint128 fromLittleEndian<uint128>(const uchar *src)
+{
+	uint128 dest;
+
+	if (isBigEndian()) {
+		for (int i = 0; i < 16; i++) {
+			dest.data[i] = src[15 - i];
+		}
+	}else {
+		for (int i = 0; i < 16; i++) {
+			dest.data[i] = src[i];
+		}
+	}
+
+	return dest;
+}
+
+template<>
+inline uint32 fromLittleEndian<uint32>(const uchar *src)
+{
+	uint32 dest;
+
+	if (isBigEndian()) {
+		for (int i = 0; i < 4; i++) {
+			dest.data[i] = src[3 - i];
+		}
+	}else {
+		for (int i = 0; i < 4; i++) {
+			dest.data[i] = src[i];
+		}
+	}
+
+	return dest;
+}
+
+template<>
+inline uint16 fromLittleEndian<uint16>(const uchar *src)
+{
+	uint16 dest;
+
+	if (isBigEndian()) {
+		for (int i = 0; i < 2; i++) {
+			dest.data[i] = src[1 - i];
+		}
+	}else {
+		for (int i = 0; i < 2; i++) {
+			dest.data[i] = src[i];
+		}
+	}
+
+	return dest;
+}
+
+inline bool isBigEndian()
+{
+    union {
+        uint32_t i;
+        char c[4];
+    } bint = {0x01020304};
+
+    return bint.c[0] == 1;
+}

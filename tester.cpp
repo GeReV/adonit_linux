@@ -42,6 +42,10 @@ Tester::Tester(QObject *parent)
 
 }
 
+void Tester::handleDiscoveredPeripheral(GatoPeripheral* p, int i) {
+
+}
+
 Tester::~Tester()
 {
 	if (peripheral) {
@@ -169,7 +173,7 @@ void Tester::handleAdvertising(le_advertising_info *info, int rssi) {
 	}
 
 	if (name[0] != 'J') {
-		printf("Found incorrect device: %s", name);
+        printf("Found incorrect device: %s", name.c_str());
 		return;
 	}
 
@@ -218,31 +222,103 @@ void Tester::connect(le_advertising_info *info) {
 	connect(peripheral, SIGNAL(servicesDiscovered()), SLOT(handleServices()));
 	connect(peripheral, SIGNAL(characteristicsDiscovered(GatoService)), SLOT(handleCharacteristics(GatoService)));
 	connect(peripheral, SIGNAL(valueUpdated(GatoCharacteristic,QByteArray)), SLOT(handleValueUpdated(GatoCharacteristic,QByteArray)));*/
+    
+    unsigned char ssh_uuid_nr[16] = { 0xdc, 0xd6, 0x89, 0x80, 0xaa, 0xdc, 0x11, 0xe1, 0xa2, 0x2a, 0x00, 0x02, 0xa5, 0xd5, 0xc5, 0x1b };
+    
+    int err;
+    sdp_list_t *response_list = NULL, *search_list, *attrid_list;
+    sdp_session_t *session = 0;
+    uuid_t svc_uuid;
 
-	hci_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-	if (hci_fd == -1) {
-		printf("Could not create L2CAP socket");
-		return;
-	}
+    bdaddr_t tmp = {0, 0, 0, 0, 0, 0};
 
-	struct sockaddr_l2 l2addr;
-	memset(&l2addr, 0, sizeof(l2addr));
+    // connect to the SDP server running on the remote machine
+    session = sdp_connect( &tmp, &info->bdaddr, SDP_RETRY_IF_BUSY );
 
-	l2addr.l2_family = AF_BLUETOOTH;
-	l2addr.l2_cid = htobs(ATT_CID);
-#ifdef BDADDR_LE_PUBLIC
-	l2addr.l2_bdaddr_type = BDADDR_LE_PUBLIC; // TODO
-#endif
-	l2addr.l2_bdaddr = info->bdaddr;
+    // specify the UUID of the application we're searching for
+    sdp_uuid128_create( &svc_uuid, &ssh_uuid_nr );
+    search_list = sdp_list_append( NULL, &svc_uuid );
 
-	int err = ::connect(hci_fd, reinterpret_cast<sockaddr*>(&l2addr), sizeof(l2addr));
-	if (err == -1 && errno != EINPROGRESS) {
-		printf("Could not connect to L2CAP socket");
-		hci_fd = -1;
-		return;
-	}
+    // specify that we want a list of all the matching applications' attributes
+    uint32_t range = 0x0000ffff;
+    attrid_list = sdp_list_append( NULL, &range );
 
-	printf("Connected!");
+    // get a list of service records that have UUID 0xabcd
+    err = sdp_service_search_attr_req( session, search_list, SDP_ATTR_REQ_RANGE, attrid_list, &response_list);
+
+    sdp_list_t *r = response_list;
+
+    // go through each of the service records
+    for (; r; r = r->next ) {
+        sdp_record_t *rec = (sdp_record_t*) r->data;
+        sdp_list_t *proto_list;
+        
+        // get a list of the protocol sequences
+        if( sdp_get_access_protos( rec, &proto_list ) == 0 ) {
+        sdp_list_t *p = proto_list;
+
+        // go through each protocol sequence
+        for( ; p ; p = p->next ) {
+            sdp_list_t *pds = (sdp_list_t*)p->data;
+
+            // go through each protocol list of the protocol sequence
+            for( ; pds ; pds = pds->next ) {
+
+                // check the protocol attributes
+                sdp_data_t *d = (sdp_data_t*)pds->data;
+                int proto = 0;
+                for( ; d; d = d->next ) {
+                    switch( d->dtd ) { 
+                        case SDP_UUID16:
+                        case SDP_UUID32:
+                        case SDP_UUID128:
+                            proto = sdp_uuid_to_proto( &d->val.uuid );
+                            break;
+                        case SDP_UINT8:
+                            if( proto == RFCOMM_UUID ) {
+                                printf("rfcomm channel: %d\n",d->val.int8);
+                            }
+                            break;
+                    }
+                }
+            }
+            sdp_list_free( (sdp_list_t*)p->data, 0 );
+        }
+        sdp_list_free( proto_list, 0 );
+
+        }
+
+        printf("found service record 0x%x\n", rec->handle);
+        sdp_record_free( rec );
+    }
+
+    sdp_close(session);
+
+
+	//hci_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+	//if (hci_fd == -1) {
+		//printf("Could not create L2CAP socket");
+		//return;
+	//}
+
+	//struct sockaddr_l2 l2addr;
+	//memset(&l2addr, 0, sizeof(l2addr));
+
+	//l2addr.l2_family = AF_BLUETOOTH;
+	//l2addr.l2_cid = htobs(ATT_CID);
+//#ifdef BDADDR_LE_PUBLIC
+	//l2addr.l2_bdaddr_type = BDADDR_LE_PUBLIC; // TODO
+//#endif
+	//l2addr.l2_bdaddr = info->bdaddr;
+
+	//int err = ::connect(hci_fd, reinterpret_cast<sockaddr*>(&l2addr), sizeof(l2addr));
+	//if (err == -1 && errno != EINPROGRESS) {
+		//printf("Could not connect to L2CAP socket");
+		//hci_fd = -1;
+		//return;
+	//}
+
+	//printf("Connected!");
 
 	//discoverServices();
 
@@ -308,22 +384,22 @@ void Tester::parseEIR(uint8_t data[], int len)
 
 void Tester::parseEIRUUIDs(int size, bool complete, uint8_t data[], int len)
 {
-	for (int pos = 0; pos < len; pos += size) {
-		bt_uuid_t uuid;
-		switch (size) {
-		case 16/8:
-			uuid = bt_uuid16_create(&uuid, fromLittleEndian<uint16>(&data[pos]).u);
-			break;
-		case 32/8:
-			uuid = bt_uuid32_create(&uuid, fromLittleEndian<uint32>(&data[pos]).u);
-			break;
-		case 128/8:
-			uuid = bt_uuid128_create(&uuid, fromLittleEndian<uint128>(&data[pos]).u);
-			break;
-		}
+	//for (int pos = 0; pos < len; pos += size) {
+		//bt_uuid_t uuid;
+		//switch (size) {
+		//case 16/8:
+			//uuid = bt_uuid16_create(&uuid, fromLittleEndian<uint16>(&data[pos]).u);
+			//break;
+		//case 32/8:
+			//uuid = bt_uuid32_create(&uuid, fromLittleEndian<uint32>(&data[pos]).u);
+			//break;
+		//case 128/8:
+			//uuid = bt_uuid128_create(&uuid, fromLittleEndian<uint128>(&data[pos]).u);
+			//break;
+		//}
 
-		service_uuids.insert(uuid);
-	}
+		//service_uuids.insert(uuid);
+	//}
 }
 
 void Tester::parseName(bool complete, uint8_t data[], int len)

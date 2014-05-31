@@ -11,6 +11,8 @@
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/l2cap.h>
+#include <bluetooth/sdp.h>
+#include <bluetooth/sdp_lib.h>
 #include <bluetooth/uuid.h>
 
 #include <sys/types.h>
@@ -21,7 +23,7 @@
 #include <errno.h>
 #include <assert.h>
 
-#include "endian.h"
+//#include "endian.h"
 #include "uinput.h"
 
 class Tester : public QObject
