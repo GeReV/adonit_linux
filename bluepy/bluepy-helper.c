@@ -40,6 +40,8 @@
 #include "gatt.h"
 #include "gatttool.h"
 
+#include "uinput.h"
+
 static GIOChannel *iochannel = NULL;
 static GAttrib *attrib = NULL;
 static GMainLoop *event_loop;
@@ -958,7 +960,84 @@ static gboolean prompt_read(GIOChannel *chan, GIOCondition cond,
 	return TRUE;
 }
 
+void handleReport(int p, int x, int y, int z)
+{
+	struct input_event ev;
 
+	gettimeofday(&ev.time, 0);
+
+	int btn_0 = (p & 0x1);
+	int btn_1 = (p & 0x2) >> 1;
+
+	if (btn_0 != prev_btn_0) {
+		ev.type = EV_KEY;
+		ev.code = BTN_0;
+		ev.value = btn_0;
+
+		uinput_write_event(&info, &ev);
+	}
+	prev_btn_0 = btn_0;
+
+	if (btn_1 != prev_btn_1) {
+		ev.type = EV_KEY;
+		ev.code = BTN_1;
+		ev.value = btn_1;
+
+		uinput_write_event(&info, &ev);
+	}
+	prev_btn_1 = btn_1;
+
+	ev.type = EV_ABS;
+	ev.code = ABS_PRESSURE;
+	ev.value = (p >> 5) & 0x7ff;
+	uinput_write_event(&info, &ev);
+
+        ssize_t size = read(fd, &event, sizeof(struct input_event));
+        while(size > 0) {
+            struct input_event ev;
+            printf("%d %i %i %i\n", event.time, event.type, event.code, event.value);
+            if (event.type == EV_SYN) {
+                printf("PACK %i %i\n", event.code, event.value);
+            } else if (event.type == EV_KEY) {
+                if (event.code == BTN_TOUCH) {
+                    event.code = BTN_TOOL_PEN;
+                }
+                printf("EV_KEY code=%i value=%i\n", event.code, event.value);
+
+                gettimeofday(&ev.time, 0);
+                ev.type = EV_KEY;
+                ev.code = event.code;
+                ev.value = event.value;
+
+                uinput_write_event(&info, &ev);
+            } else if (event.type == EV_ABS) {
+                printf("EV_ABS code=%i value=%i\n", event.code, event.value);
+
+                gettimeofday(&ev.time, 0);
+
+                ev.type = EV_ABS;
+
+                if (event.code == ABS_X || event.code == ABS_Y) {
+                    ev.code = event.code;
+                    ev.value = event.value;
+
+                    uinput_write_event(&info, &ev);
+                }
+
+            }
+
+            size = read(fd, &event, sizeof(struct input_event));
+
+            //qDebug() << ev.time.tv_usec << ev.value << btn_0 << btn_1;
+        }
+
+    ev.type = EV_SYN;
+    ev.code = SYN_REPORT;
+    ev.value = 0;
+
+    uinput_write_event(&info, &ev);
+
+}
 
 int main(int argc, char *argv[])
 {
