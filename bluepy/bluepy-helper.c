@@ -67,7 +67,7 @@ struct characteristic_data {
     bt_uuid_t uuid;
 };
 
-struct uinput_info info;
+struct uinput_info uinfo;
 struct uinput_user_dev dev;
 
 int fd;
@@ -76,8 +76,52 @@ struct input_event event;
 int prev_btn_0;
 int prev_btn_1;
 
+void pen_update(uint16_t p)
+{
+    struct input_event ev;
 
-static void cmd_help(int argcp, char **argvp);
+    gettimeofday(&ev.time, 0);
+
+    int btn_0 = (p & 0x1);
+    int btn_1 = (p & 0x2) >> 1;
+
+    if (btn_0 != prev_btn_0) {
+        ev.type = EV_KEY;
+        ev.code = BTN_0;
+        ev.value = btn_0;
+
+        uinput_write_event(&uinfo, &ev);
+
+        printf("Button 0\n");
+    }
+    prev_btn_0 = btn_0;
+
+    if (btn_1 != prev_btn_1) {
+        ev.type = EV_KEY;
+        ev.code = BTN_1;
+        ev.value = btn_1;
+
+        uinput_write_event(&uinfo, &ev);
+
+        printf("Button 1\n");
+    }
+    prev_btn_1 = btn_1;
+
+    ev.type = EV_ABS;
+    ev.code = ABS_PRESSURE;
+    ev.value = (p >> 5) & 0x7ff;
+    uinput_write_event(&uinfo, &ev);
+
+    printf("Pressure: %d\n", ev.value);
+
+    ev.type = EV_SYN;
+    ev.code = SYN_REPORT;
+    ev.value = 0;
+
+    uinput_write_event(&uinfo, &ev);
+
+}
+
 
 static enum state {
     STATE_DISCONNECTED=0,
@@ -86,7 +130,7 @@ static enum state {
 } conn_state;
 
 
-static const char 
+static const char
 *tag_RESPONSE  = "rsp",
     *tag_ERRCODE   = "code",
     *tag_HANDLE    = "hnd",
@@ -120,7 +164,7 @@ static const char
     *err_BAD_PARAM = "badparam",
     *err_BAD_STATE = "badstate";
 
-static const char 
+static const char
 *st_DISCONNECTED = "disc",
     *st_CONNECTING   = "tryconn",
     *st_CONNECTED    = "conn";
@@ -166,35 +210,9 @@ static void resp_error(const char *errcode)
     resp_end();
 }
 
-static void cmd_status(int argcp, char **argvp)
-{
-    resp_begin(rsp_STATUS);
-    switch(conn_state)
-    {
-        case STATE_CONNECTING:
-            send_sym(tag_CONNSTATE, st_CONNECTING);
-            send_str(tag_DEVICE, opt_dst);
-            break;
-
-        case STATE_CONNECTED:
-            send_sym(tag_CONNSTATE, st_CONNECTED);
-            send_str(tag_DEVICE, opt_dst);
-            break;
-
-        default:
-            send_sym(tag_CONNSTATE, st_DISCONNECTED);
-            break;
-    }
-
-    send_uint(tag_MTU, opt_mtu);
-    send_str(tag_SEC_LEVEL, opt_sec_level);
-    resp_end();
-}
-
 static void set_state(enum state st)
 {
     conn_state = st;
-    cmd_status(0, NULL);
 }
 
 static void events_handler(const uint8_t *pdu, uint16_t len, gpointer user_data)
@@ -215,10 +233,9 @@ static void events_handler(const uint8_t *pdu, uint16_t len, gpointer user_data)
     assert( len >= 3 );
     handle = att_get_u16(&pdu[1]);
 
-    resp_begin( evt==ATT_OP_HANDLE_NOTIFY ? rsp_NOTIFY : rsp_IND );
-    send_uint( tag_HANDLE, handle );
-    send_data( pdu+3, len-3 );
-    resp_end();
+    uint16_t value = pdu[3] << 8 | pdu[4];
+
+    pen_update(value);
 
     if (evt == ATT_OP_HANDLE_NOTIFY)
         return;
@@ -232,12 +249,14 @@ static void events_handler(const uint8_t *pdu, uint16_t len, gpointer user_data)
 
 static void connect_cb(GIOChannel *io, GError *err, gpointer user_data)
 {
+    printf("Connected.");
     if (err) {
         set_state(STATE_DISCONNECTED);
         resp_error(err_CONN_FAIL);
         printf("# Connect error: %s\n", err->message);
         return;
     }
+
 
     attrib = g_attrib_new(iochannel);
     g_attrib_register(attrib, ATT_OP_HANDLE_NOTIFY, GATTRIB_ALL_HANDLES,
@@ -246,22 +265,17 @@ static void connect_cb(GIOChannel *io, GError *err, gpointer user_data)
             events_handler, attrib, NULL);
     set_state(STATE_CONNECTED);
 
-    info.create_mode = WDAEMON_CREATE;
-
-    if (uinput_create(&info)) {
-        printf("UInput device created successfully.");
-    }
-
     uint8_t value = 0x1;
     gatt_write_char(attrib, 0x000c, &value, 1, NULL, NULL);
-    resp_begin(rsp_WRITE);
-    resp_end();
 }
 
 static void disconnect_io()
 {
     if (conn_state == STATE_DISCONNECTED)
         return;
+
+    uint8_t value = 0x0;
+    gatt_write_char(attrib, 0x000c, &value, 1, NULL, NULL);
 
     g_attrib_unref(attrib);
     attrib = NULL;
@@ -463,11 +477,6 @@ done:
     g_free(char_data);
 }
 
-static void cmd_exit(int argcp, char **argvp)
-{
-    g_main_loop_quit(event_loop);
-}
-
 static gboolean channel_watcher(GIOChannel *chan, GIOCondition cond,
         gpointer user_data)
 {
@@ -505,11 +514,6 @@ static void cmd_connect(int argcp, char **argvp)
         set_state(STATE_DISCONNECTED);
     else
         g_io_add_watch(iochannel, G_IO_HUP, channel_watcher, NULL);
-}
-
-static void cmd_disconnect(int argcp, char **argvp)
-{
-    disconnect_io();
 }
 
 static void cmd_primary(int argcp, char **argvp)
@@ -781,45 +785,6 @@ static void cmd_char_write_rsp(int argcp, char **argvp)
     cmd_char_write_common(argcp, argvp, 1);
 }
 
-static void cmd_sec_level(int argcp, char **argvp)
-{
-    GError *gerr = NULL;
-    BtIOSecLevel sec_level;
-
-    if (argcp < 2) {
-        resp_error(err_BAD_PARAM);
-        return;
-    }
-
-    if (strcasecmp(argvp[1], "medium") == 0)
-        sec_level = BT_IO_SEC_MEDIUM;
-    else if (strcasecmp(argvp[1], "high") == 0)
-        sec_level = BT_IO_SEC_HIGH;
-    else if (strcasecmp(argvp[1], "low") == 0)
-        sec_level = BT_IO_SEC_LOW;
-    else {
-        resp_error(err_BAD_PARAM);
-        return;
-    }
-
-    g_free(opt_sec_level);
-    opt_sec_level = g_strdup(argvp[1]);
-
-    if (conn_state != STATE_CONNECTED)
-        return;
-
-    assert(!opt_psm);
-
-    bt_io_set(iochannel, &gerr,
-            BT_IO_OPT_SEC_LEVEL, sec_level,
-            BT_IO_OPT_INVALID);
-    if (gerr) {
-        printf("# Error: %s\n", gerr->message);
-        resp_error(err_COMM_ERR);
-        g_error_free(gerr);
-    }
-}
-
 static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
         gpointer user_data)
 {
@@ -840,7 +805,6 @@ static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
     if (g_attrib_set_mtu(attrib, mtu))
     {
         opt_mtu = mtu;
-        cmd_status(0, NULL);
     }
     else
     {
@@ -849,230 +813,48 @@ static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
     }
 }
 
-static void cmd_mtu(int argcp, char **argvp)
-{
-    if (conn_state != STATE_CONNECTED) {
-        resp_error(err_BAD_STATE);
-        return;
+gboolean touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_data) {
+    struct input_event *ev;
+    gsize size;
+    gchar buffer[24];
+    GError *error = NULL;
+
+    if (error) {
+        printf("%s", error->message);
     }
 
-    assert(!opt_psm);
+    while(G_IO_STATUS_NORMAL == g_io_channel_read_chars(chan, buffer, sizeof(struct input_event), &size, &error)) {
+        ev = (struct input_event *)buffer;
 
-    if (argcp < 2) {
-        resp_error(err_BAD_PARAM);
-        return;
+        if (ev->type == EV_SYN) {
+            printf("PACK %i %i\n", ev->code, ev->value);
+        } else if (ev->type == EV_KEY) {
+            //if (ev->code == BTN_TOUCH) {
+            //    ev->code = BTN_TOOL_PEN;
+            //}
+            printf("EV_KEY code=%i value=%i\n", ev->code, ev->value);
+
+            uinput_write_event(&uinfo, ev);
+        } else if (ev->type == EV_ABS) {
+            printf("EV_ABS code=%i value=%i\n", ev->code, ev->value);
+
+            if (ev->code == ABS_X || ev->code == ABS_Y) {
+                uinput_write_event(&uinfo, ev);
+            }
+        }
     }
 
-    if (opt_mtu) {
-        resp_error(err_BAD_STATE);
-        /* Can only set once per connection */
-        return;
-    }
+    ev->type = EV_SYN;
+    ev->code = SYN_REPORT;
+    ev->value = 0;
 
-    errno = 0;
-    opt_mtu = strtoll(argvp[1], NULL, 16);
-    if (errno != 0 || opt_mtu < ATT_DEFAULT_LE_MTU) {
-        resp_error(err_BAD_PARAM);
-        return;
-    }
+    uinput_write_event(&uinfo, ev);
 
-    gatt_exchange_mtu(attrib, opt_mtu, exchange_mtu_cb, NULL);
-}
-
-static struct {
-    const char *cmd;
-    void (*func)(int argcp, char **argvp);
-    const char *params;
-    const char *desc;
-} commands[] = {
-    { "help",		cmd_help,	"",
-        "Show this help"},
-    { "stat",		cmd_status,	"",
-        "Show current status" },
-    { "quit",		cmd_exit,	"",
-        "Exit interactive mode" },
-    { "conn",		cmd_connect,	"[address [address type]]",
-        "Connect to a remote device" },
-    { "disc",		cmd_disconnect,	"",
-        "Disconnect from a remote device" },
-    { "svcs",		cmd_primary,	"[UUID]",
-        "Primary Service Discovery" },
-    { "incl",		cmd_included,	"[start hnd [end hnd]]",
-        "Find Included Services" },
-    { "char",		cmd_char,	"[start hnd [end hnd [UUID]]]",
-        "Characteristics Discovery" },
-    { "desc",		cmd_char_desc,	"[start hnd] [end hnd]",
-        "Characteristics Descriptor Discovery" },
-    { "rd",			cmd_read_hnd,	"<handle>",
-        "Characteristics Value/Descriptor Read by handle" },
-    { "rdu",		cmd_read_uuid,	"<UUID> [start hnd] [end hnd]",
-        "Characteristics Value/Descriptor Read by UUID" },
-    { "wrr",		cmd_char_write_rsp, "<handle> <new value>",
-        "Characteristic Value Write (Write Request)" },
-    { "wr",			cmd_char_write,	"<handle> <new value>",
-        "Characteristic Value Write (No response)" },
-    { "secu",		cmd_sec_level,	"[low | medium | high]",
-        "Set security level. Default: low" },
-    { "mtu",		cmd_mtu,	"<value>",
-        "Exchange MTU for GATT/ATT" },
-    { NULL, NULL, NULL}
-};
-
-static void cmd_help(int argcp, char **argvp)
-{
-    int i;
-
-    for (i = 0; commands[i].cmd; i++)
-        printf("#%-15s %-30s %s\n", commands[i].cmd,
-                commands[i].params, commands[i].desc);
-    cmd_status(0, NULL);
-}
-
-static void parse_line(char *line_read)
-{
-    gchar **argvp;
-    int argcp;
-    int i;
-
-    line_read = g_strstrip(line_read);
-
-    if (*line_read == '\0')
-        goto done;
-
-    g_shell_parse_argv(line_read, &argcp, &argvp, NULL);
-
-    for (i = 0; commands[i].cmd; i++)
-        if (strcasecmp(commands[i].cmd, argvp[0]) == 0)
-            break;
-
-    if (commands[i].cmd)
-        commands[i].func(argcp, argvp);
-    else
-        resp_error(err_BAD_CMD);
-
-    g_strfreev(argvp);
-
-done:
-    free(line_read);
-}
-
-static gboolean prompt_read(GIOChannel *chan, GIOCondition cond,
-        gpointer user_data)
-{
-    gchar *myline;
-    GError *err;
-
-    if (cond & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
-        g_io_channel_unref(chan);
-        return FALSE;
-    }
-
-    if ( G_IO_STATUS_NORMAL != g_io_channel_read_line(chan, &myline, NULL, NULL, NULL)
-            || myline == NULL
-       )
-    {
-        printf("# Quitting on input read fail\n");
-        g_main_loop_quit(event_loop);
-        return FALSE;
-    }
-
-    parse_line(myline);
     return TRUE;
 }
 
-void pen_update(uint16_t p)
-{
-    struct input_event ev;
-
-    gettimeofday(&ev.time, 0);
-
-    int btn_0 = (p & 0x1);
-    int btn_1 = (p & 0x2) >> 1;
-
-    if (btn_0 != prev_btn_0) {
-        ev.type = EV_KEY;
-        ev.code = BTN_0;
-        ev.value = btn_0;
-
-        uinput_write_event(&info, &ev);
-    }
-    prev_btn_0 = btn_0;
-
-    if (btn_1 != prev_btn_1) {
-        ev.type = EV_KEY;
-        ev.code = BTN_1;
-        ev.value = btn_1;
-
-        uinput_write_event(&info, &ev);
-    }
-    prev_btn_1 = btn_1;
-
-    ev.type = EV_ABS;
-    ev.code = ABS_PRESSURE;
-    ev.value = (p >> 5) & 0x7ff;
-    uinput_write_event(&info, &ev);
-
-
-    ev.type = EV_SYN;
-    ev.code = SYN_REPORT;
-    ev.value = 0;
-
-    uinput_write_event(&info, &ev);
-
-}
-
-void touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_data) {
-    struct input_event ev;
-
-    ssize_t size;
-
-    g_io_channel_read_chars(chan, (gchar *)&event, sizeof(struct input_event), &size, NULL);
-
-    while(size > 0) {
-        struct input_event ev;
-        printf("%d %i %i %i\n", event.time, event.type, event.code, event.value);
-        if (event.type == EV_SYN) {
-            printf("PACK %i %i\n", event.code, event.value);
-        } else if (event.type == EV_KEY) {
-            if (event.code == BTN_TOUCH) {
-                event.code = BTN_TOOL_PEN;
-            }
-            printf("EV_KEY code=%i value=%i\n", event.code, event.value);
-
-            gettimeofday(&ev.time, 0);
-            ev.type = EV_KEY;
-            ev.code = event.code;
-            ev.value = event.value;
-
-            uinput_write_event(&info, &ev);
-        } else if (event.type == EV_ABS) {
-            printf("EV_ABS code=%i value=%i\n", event.code, event.value);
-
-            gettimeofday(&ev.time, 0);
-
-            ev.type = EV_ABS;
-
-            if (event.code == ABS_X || event.code == ABS_Y) {
-                ev.code = event.code;
-                ev.value = event.value;
-
-                uinput_write_event(&info, &ev);
-            }
-
-        }
-
-        g_io_channel_read_chars(chan, (gchar *)&event, sizeof(struct input_event), &size, NULL);
-    }
-
-    ev.type = EV_SYN;
-    ev.code = SYN_REPORT;
-    ev.value = 0;
-
-    uinput_write_event(&info, &ev);
-}
-
 int init_touchscreen() {
-    int fd = open("/dev/input/event12", O_RDONLY | O_NONBLOCK);
+    int fd = open("/dev/input/event9", O_RDONLY | O_NONBLOCK);
 
     int grab = 1;
     ioctl(fd, EVIOCGRAB, &grab);
@@ -1088,29 +870,40 @@ int main(int argc, char *argv[])
     opt_sec_level = g_strdup("low");
 
     opt_src = NULL;
-    opt_dst = NULL;
+    opt_dst = g_strdup("00:17:53:57:81:86");
     opt_dst_type = g_strdup("public");
 
     printf("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n");
-    fflush(stdout);
 
     event_loop = g_main_loop_new(NULL, FALSE);
 
+    uinfo.create_mode = WDAEMON_CREATE;
+
+    printf("Opening uinput device...");
+    if (uinput_create(&uinfo)) {
+        printf("UInput device created successfully.");
+    }
+
     touchscreen = g_io_channel_unix_new(init_touchscreen());
 
-    g_io_add_watch(touchscreen, G_IO_IN | G_IO_HUP | G_IO_ERR, NULL, NULL);
+    g_io_channel_set_encoding(touchscreen, NULL, NULL);
 
-    iochannel = gatt_connect(NULL, "00:17:53:57:81:86", opt_dst_type, opt_sec_level,
+    g_io_add_watch(touchscreen, G_IO_IN | G_IO_HUP | G_IO_ERR, touchscreen_update, NULL);
+
+    iochannel = gatt_connect(NULL, opt_dst, opt_dst_type, opt_sec_level,
             0, 0, connect_cb);
 
-    if (iochannel == NULL)
+    if (iochannel == NULL) {
+        printf("NULL iochannel");
         return 1;
-    else
+    } else {
         g_io_add_watch(iochannel, G_IO_HUP, channel_watcher, NULL);
+    }
 
+    printf("Starting loop.");
     g_main_loop_run(event_loop);
 
-    cmd_disconnect(0, NULL);
+    disconnect_io();
     fflush(stdout);
     g_main_loop_unref(event_loop);
 

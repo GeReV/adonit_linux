@@ -122,7 +122,7 @@ int uinput_create(struct uinput_info *info)
 
 	info->fd = open(file, O_RDWR);
 	if (info->fd < 0) {
-		log(LOG_ERR, "Unable to open uinput file %s: %s\n", file,
+		printf("Unable to open uinput file %s: %s\n", file,
 		    strerror(errno));
 		return -1;
 	}
