@@ -47,8 +47,8 @@ class Device:
 
     def char_write_cmd(self, handle, value):
         # The 0%x for value is VERY naughty!  Fix this!
-        cmd = 'char-write-cmd 0x%02x 0%x' % (handle, value)
-        print cmd
+        cmd = 'char-write-cmd 0x%04x 0%x' % (handle, value)
+        print(cmd)
         self.con.sendline(cmd)
         return
 
@@ -56,9 +56,8 @@ class Device:
         self.con.sendline('char-read-uuid %s' % handle)
         self.con.expect('handle: .*? \r')
         after = self.con.after
-        rval = after.split()[1:1] + after.split()[:2]
+        rval = [after.split()[1]] + after.split()[3:]
         return [long(float.fromhex(n)) for n in rval]
-
 
     def char_read_hnd(self, handle):
         self.con.sendline('char-read-hnd 0x%02x' % handle)
@@ -71,13 +70,13 @@ class Device:
     def notification_loop(self):
         while True:
             try:
-                pnum = self.con.expect('Notification handle = .*? \r',
-                                       timeout=4)
+                pnum = self.con.expect('Notification')
             except pexpect.TIMEOUT:
                 print "TIMEOUT Exception!"
                 break
         if pnum == 0:
             after = self.con.after
+            print(after)
             hxstr = after.split()[3:]
             handle = long(float.fromhex(hxstr[0]))
             #try:
@@ -97,8 +96,10 @@ class Device:
 
 datalog = sys.stdout
 
+
 def update(data):
     print(data)
+
 
 def main():
     global datalog
@@ -109,16 +110,16 @@ def main():
         datalog = open(sys.argv[2], 'w+')
 
     #while True:
-    try:
-        pen = Device(bluetooth_adr)
+    pen = Device(bluetooth_adr)
 
-        update_handle = pen.char_read_uuid("2902")[0]
+    update_handle = pen.char_read_uuid("2902")[0]
 
-        pen.register_cb(update_handle, update)
+    pen.char_write_cmd(update_handle, 0x0100)
 
-        pen.notification_loop()
-    except:
-        pass
+    pen.register_cb(0x000b, update)
+
+    pen.notification_loop()
+
 
 if __name__ == "__main__":
     main()
