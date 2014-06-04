@@ -48,7 +48,7 @@
 				} \
 			} while(0)
 
-int UInput::wacom_set_events(struct uinput_info *info) {
+int adonit_set_events(struct uinput_info *info) {
 	/* common */
 	set_event(info, UI_SET_EVBIT, EV_KEY);
 	set_event(info, UI_SET_EVBIT, EV_ABS);
@@ -65,10 +65,10 @@ int UInput::wacom_set_events(struct uinput_info *info) {
 	return 0;
 }
 
-int UInput::wacom_set_initial_values(struct uinput_info *info,
+int adonit_set_initial_values(struct uinput_info *info,
 				     struct uinput_user_dev *dev)
 {
-	strcpy(dev->name, "Wacom: Wacom Bamboo");
+	strcpy(dev->name, "Adonit Jot Touch");
 	dev->id.bustype = BUS_VIRTUAL;
 	dev->id.vendor = USB_VENDOR_ID_WACOM;
 	dev->id.product = 0;
@@ -86,7 +86,7 @@ int UInput::wacom_set_initial_values(struct uinput_info *info,
 	return uinput_write_dev(info, dev);
 }
 
-int UInput::uinput_write_dev(struct uinput_info *info,
+int uinput_write_dev(struct uinput_info *info,
 		     struct uinput_user_dev *dev)
 {
 	int rc = 1;
@@ -108,7 +108,7 @@ err:
 	return rc;
 }
 
-int UInput::uinput_create(struct uinput_info *info)
+int uinput_create(struct uinput_info *info)
 {
 	struct uinput_user_dev dev;
 	char file[50], *tmp;
@@ -122,14 +122,14 @@ int UInput::uinput_create(struct uinput_info *info)
 
 	info->fd = open(file, O_RDWR);
 	if (info->fd < 0) {
-		log(LOG_ERR, "Unable to open uinput file %s: %s\n", file,
+		printf("Unable to open uinput file %s: %s\n", file,
 		    strerror(errno));
 		return -1;
 	}
 
 	memset(&dev, 0, sizeof(dev));
 
-	if (wacom_set_initial_values(info, &dev))
+	if (adonit_set_initial_values(info, &dev))
 		goto err;
 
 	switch(info->create_mode) {
@@ -143,7 +143,7 @@ int UInput::uinput_create(struct uinput_info *info)
 			return -1;
 	}
 
-	if (wacom_set_events(info))
+	if (adonit_set_events(info))
 		goto err;
 
 	if (need_init) {
@@ -162,7 +162,7 @@ err:
 	goto out;
 }
 
-int UInput::uinput_write_event(struct uinput_info *info, struct input_event *ev)
+int uinput_write_event(struct uinput_info *info, struct input_event *ev)
 {
 	if (write(info->fd, ev, sizeof(struct input_event)) !=
 						sizeof(struct input_event)) {
