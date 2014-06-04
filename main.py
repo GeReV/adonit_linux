@@ -52,6 +52,16 @@ class Device:
         self.con.sendline(cmd)
         return
 
+    def char_read_uuid(self, handle):
+        self.con.sendline('char-read-uuid %s' % handle)
+        self.con.expect('handle: .*? \r')
+        after = self.con.after
+        rval = after.split()[1:]
+        print(after)
+        print(rval)
+        return rval
+
+
     def char_read_hnd(self, handle):
         self.con.sendline('char-read-hnd 0x%02x' % handle)
         self.con.expect('descriptor: .*? \r')
@@ -102,7 +112,9 @@ def main():
 
     #while True:
     try:
-        Device(bluetooth_adr)
+        tag = Device(bluetooth_adr)
+
+        tag.char_read_uuid("2902")
 
         # tag.notification_loop()
     except:
