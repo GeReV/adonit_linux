@@ -5,7 +5,7 @@ BLUEZ_SRCS += attrib/att.c attrib/gatt.c attrib/gattrib.c attrib/utils.c
 BLUEZ_SRCS += btio/btio.c src/log.c
 
 IMPORT_SRCS = $(addprefix $(BLUEZ_PATH)/, $(BLUEZ_SRCS))
-LOCAL_SRCS  = bluepy-helper.c
+LOCAL_SRCS  = bluepy-helper.c uinput.c log.c
 
 CC = gcc
 CFLAGS = -O0 -g

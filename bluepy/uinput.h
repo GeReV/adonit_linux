@@ -40,11 +40,11 @@ struct uinput_info {
 	enum create_type create_mode;
 };
 
-int uinput_create(struct uinput_info *info);
-int uinput_write_dev(struct uinput_info *info, struct uinput_user_dev *dev);
-int uinput_write_event(struct uinput_info *info, struct input_event *ev);
-int adonit_set_events(struct uinput_info *info);
-int adonit_set_initial_values(struct uinput_info *info, struct uinput_user_dev *dev);
+extern int uinput_create(struct uinput_info *info);
+extern int uinput_write_dev(struct uinput_info *info, struct uinput_user_dev *dev);
+extern int uinput_write_event(struct uinput_info *info, struct input_event *ev);
+extern int adonit_set_events(struct uinput_info *info);
+extern int adonit_set_initial_values(struct uinput_info *info, struct uinput_user_dev *dev);
 
 #endif	/* UINPUT_H */
 
