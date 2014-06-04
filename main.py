@@ -56,10 +56,8 @@ class Device:
         self.con.sendline('char-read-uuid %s' % handle)
         self.con.expect('handle: .*? \r')
         after = self.con.after
-        rval = after.split()[1:]
-        print(after)
-        print(rval)
-        return rval
+        rval = after.split()[1:1] + after.split()[:2]
+        return [long(float.fromhex(n)) for n in rval]
 
 
     def char_read_hnd(self, handle):
@@ -97,13 +95,13 @@ class Device:
         self.cb[handle] = fn
         return
 
-barometer = None
 datalog = sys.stdout
 
+def update(data):
+    print(data)
 
 def main():
     global datalog
-    global barometer
 
     bluetooth_adr = sys.argv[1]
     #data['addr'] = bluetooth_adr
@@ -112,11 +110,13 @@ def main():
 
     #while True:
     try:
-        tag = Device(bluetooth_adr)
+        pen = Device(bluetooth_adr)
 
-        tag.char_read_uuid("2902")
+        update_handle = pen.char_read_uuid("2902")[0]
 
-        # tag.notification_loop()
+        pen.register_cb(update_handle, update)
+
+        pen.notification_loop()
     except:
         pass
 
