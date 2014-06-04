@@ -228,6 +228,12 @@ static void connect_cb(GIOChannel *io, GError *err, gpointer user_data)
 	g_attrib_register(attrib, ATT_OP_HANDLE_IND, GATTRIB_ALL_HANDLES,
 						events_handler, attrib, NULL);
 	set_state(STATE_CONNECTED);
+
+
+    uint8_t value = 0x1;
+    gatt_write_char(attrib, 0x000c, &value, 1, NULL, NULL);
+                resp_begin(rsp_WRITE);
+                resp_end();
 }
 
 static void disconnect_io()
@@ -983,9 +989,6 @@ int main(int argc, char *argv[])
 	else
 		g_io_add_watch(iochannel, G_IO_HUP, channel_watcher, NULL);
 
-    gatt_write_char(attrib, 0x000c, 0x01, 2, NULL, NULL);
-                resp_begin(rsp_WRITE);
-                resp_end();
 
 
 	g_main_loop_run(event_loop);
