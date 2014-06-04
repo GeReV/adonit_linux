@@ -6,7 +6,7 @@ The app uses code from [BlueZ](http://www.bluez.org).
 
 ## Build requirements
 
-To build you will need **[glib](https://developer.gnome.org/glib/stable)** and [DBus](http://www.linuxfromscratch.org/blfs/view/svn/general/dbus.html) >= 1.6.
+To build you will need **[glib](https://developer.gnome.org/glib/stable)** and **[DBus](http://www.linuxfromscratch.org/blfs/view/svn/general/dbus.html)** >= 1.6.
 
 Build using `make` command.
 
