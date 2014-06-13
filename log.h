@@ -22,24 +22,15 @@
 #ifndef LOG_H
 #define LOG_H
 #include <syslog.h>
-extern int log_use_stdout;
-static void inline set_log_stdout(void)
-{
-	log_use_stdout = 1;
-}
 
-static void inline set_log_syslog(void)
-{
-	log_use_stdout = 0;
-}
-#define log(l, x...) do { \
+static int verbose = 0;
+
+#define VLOG(x...) if (verbose) { \
+		LOG(x); \
+	}
+
+#define LOG(x...) do { \
 			fprintf(stderr, x); \
 	} while(0)
-/*#define log(l, x...) do { \
-		if (log_use_stdout) { \
-			fprintf(stderr, x); \
-		} else \
-			syslog(l, x); \
-	} while(0)*/
 #endif	/* LOG_H */
 

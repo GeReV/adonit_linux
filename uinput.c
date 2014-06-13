@@ -42,7 +42,7 @@
 #endif
 
 #define set_event(x, y, z) do { if (ioctl((x)->fd, (y), (z)) == -1) { \
-					log(LOG_ERR, "Error enabling %s (%s)\n", \
+					LOG("Error enabling %s (%s)\n", \
 					    #z, strerror(errno)); \
 					return 1; \
 				} \
@@ -164,6 +164,13 @@ err:
 
 int uinput_write_event(struct uinput_info *info, struct input_event *ev)
 {
+	VLOG("[\e[33m%ld\e[0m][%s] %04x %d\n", ev->time.tv_usec,
+			(ev->type == EV_SYN ? "EV_SYN" :
+				ev->type == EV_KEY ? "EV_KEY" :
+				ev->type == EV_ABS ? "EV_ABS" : "UNKNOWN"),
+			ev->code,
+			ev->value);
+
 	if (write(info->fd, ev, sizeof(struct input_event)) !=
 						sizeof(struct input_event)) {
 		perror("Error writing uinput event: ");

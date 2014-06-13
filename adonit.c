@@ -36,7 +36,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
-
+#include <getopt.h>
 
 #include "lib/uuid.h"
 #include <btio/btio.h>
@@ -45,6 +45,7 @@
 #include "gatt.h"
 #include "gatttool.h"
 
+#include "log.h"
 #include "uinput.h"
 
 static GIOChannel *iochannel = NULL;
@@ -60,12 +61,57 @@ static int opt_mtu = 0;
 static int start;
 static int end;
 
+static enum state {
+    STATE_DISCONNECTED=0,
+    STATE_CONNECTING=1,
+    STATE_CONNECTED=2
+} conn_state;
+
 struct characteristic_data {
     uint16_t orig_start;
     uint16_t start;
     uint16_t end;
     bt_uuid_t uuid;
 };
+
+static const char
+*tag_RESPONSE  = "rsp",
+    *tag_ERRCODE   = "code",
+    *tag_HANDLE    = "hnd",
+    *tag_UUID      = "uuid",
+    *tag_DATA      = "d",
+    *tag_CONNSTATE = "state",
+    *tag_SEC_LEVEL = "sec",
+    *tag_MTU       = "mtu",
+    *tag_DEVICE    = "dst",
+    *tag_RANGE_START = "hstart",
+    *tag_RANGE_END = "hend",
+    *tag_PROPERTIES= "props",
+    *tag_VALUE_HANDLE = "vhnd";
+
+static const char
+*rsp_ERROR     = "err",
+    *rsp_STATUS    = "stat",
+    *rsp_NOTIFY    = "ntfy",
+    *rsp_IND       = "ind",
+    *rsp_DISCOVERY = "find",
+    *rsp_DESCRIPTORS = "desc",
+    *rsp_READ      = "rd",
+    *rsp_WRITE     = "wr";
+
+static const char
+*err_CONN_FAIL = "connfail",
+    *err_COMM_ERR  = "comerr",
+    *err_PROTO_ERR = "protoerr",
+    *err_NOT_FOUND = "notfound",
+    *err_BAD_CMD   = "badcmd",
+    *err_BAD_PARAM = "badparam",
+    *err_BAD_STATE = "badstate";
+
+static const char
+*st_DISCONNECTED = "disc",
+    *st_CONNECTING   = "tryconn",
+    *st_CONNECTED    = "conn";
 
 struct uinput_info uinfo;
 struct uinput_user_dev dev;
@@ -122,52 +168,45 @@ void pen_update(uint16_t p)
 
 }
 
+gboolean touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_data) {
+    struct input_event *ev;
+    gsize size;
+    gchar buffer[24];
+    GError *error = NULL;
 
-static enum state {
-    STATE_DISCONNECTED=0,
-    STATE_CONNECTING=1,
-    STATE_CONNECTED=2
-} conn_state;
+    if (error) {
+        printf("%s", error->message);
+    }
 
+    while(G_IO_STATUS_NORMAL == g_io_channel_read_chars(chan, buffer, sizeof(struct input_event), &size, &error)) {
+        ev = (struct input_event *)buffer;
 
-static const char
-*tag_RESPONSE  = "rsp",
-    *tag_ERRCODE   = "code",
-    *tag_HANDLE    = "hnd",
-    *tag_UUID      = "uuid",
-    *tag_DATA      = "d",
-    *tag_CONNSTATE = "state",
-    *tag_SEC_LEVEL = "sec",
-    *tag_MTU       = "mtu",
-    *tag_DEVICE    = "dst",
-    *tag_RANGE_START = "hstart",
-    *tag_RANGE_END = "hend",
-    *tag_PROPERTIES= "props",
-    *tag_VALUE_HANDLE = "vhnd";
+        if (ev->type == EV_SYN) {
+            printf("PACK %i %i\n", ev->code, ev->value);
+        } else if (ev->type == EV_KEY) {
+            //if (ev->code == BTN_TOUCH) {
+            //    ev->code = BTN_TOOL_PEN;
+            //}
+            printf("EV_KEY code=%i value=%i\n", ev->code, ev->value);
 
-static const char
-*rsp_ERROR     = "err",
-    *rsp_STATUS    = "stat",
-    *rsp_NOTIFY    = "ntfy",
-    *rsp_IND       = "ind",
-    *rsp_DISCOVERY = "find",
-    *rsp_DESCRIPTORS = "desc",
-    *rsp_READ      = "rd",
-    *rsp_WRITE     = "wr";
+            uinput_write_event(&uinfo, ev);
+        } else if (ev->type == EV_ABS) {
+            printf("EV_ABS code=%i value=%i\n", ev->code, ev->value);
 
-static const char
-*err_CONN_FAIL = "connfail",
-    *err_COMM_ERR  = "comerr",
-    *err_PROTO_ERR = "protoerr",
-    *err_NOT_FOUND = "notfound",
-    *err_BAD_CMD   = "badcmd",
-    *err_BAD_PARAM = "badparam",
-    *err_BAD_STATE = "badstate";
+            if (ev->code == ABS_X || ev->code == ABS_Y) {
+                uinput_write_event(&uinfo, ev);
+            }
+        }
+    }
 
-static const char
-*st_DISCONNECTED = "disc",
-    *st_CONNECTING   = "tryconn",
-    *st_CONNECTED    = "conn";
+    ev->type = EV_SYN;
+    ev->code = SYN_REPORT;
+    ev->value = 0;
+
+    uinput_write_event(&uinfo, ev);
+
+    return TRUE;
+}
 
 static void resp_begin(const char *rsptype)
 {
@@ -813,46 +852,6 @@ static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
     }
 }
 
-gboolean touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_data) {
-    struct input_event *ev;
-    gsize size;
-    gchar buffer[24];
-    GError *error = NULL;
-
-    if (error) {
-        printf("%s", error->message);
-    }
-
-    while(G_IO_STATUS_NORMAL == g_io_channel_read_chars(chan, buffer, sizeof(struct input_event), &size, &error)) {
-        ev = (struct input_event *)buffer;
-
-        if (ev->type == EV_SYN) {
-            printf("PACK %i %i\n", ev->code, ev->value);
-        } else if (ev->type == EV_KEY) {
-            //if (ev->code == BTN_TOUCH) {
-            //    ev->code = BTN_TOOL_PEN;
-            //}
-            printf("EV_KEY code=%i value=%i\n", ev->code, ev->value);
-
-            uinput_write_event(&uinfo, ev);
-        } else if (ev->type == EV_ABS) {
-            printf("EV_ABS code=%i value=%i\n", ev->code, ev->value);
-
-            if (ev->code == ABS_X || ev->code == ABS_Y) {
-                uinput_write_event(&uinfo, ev);
-            }
-        }
-    }
-
-    ev->type = EV_SYN;
-    ev->code = SYN_REPORT;
-    ev->value = 0;
-
-    uinput_write_event(&uinfo, ev);
-
-    return TRUE;
-}
-
 int init_touchscreen() {
     int fd = open("/dev/input/event9", O_RDONLY | O_NONBLOCK);
 
@@ -864,6 +863,34 @@ int init_touchscreen() {
 
 int main(int argc, char *argv[])
 {
+	int c;
+
+	while (1) {
+		int this_option_optind = optind ? optind : 1;
+		int option_index = 0;
+
+		static struct option long_options[] = {
+			{"verbose",	no_argument,       0,  	'v'	},
+			{0,         0,                 0,  	0 	}
+		};
+
+		c = getopt_long(argc, argv, "v",
+				 long_options, &option_index);
+
+		if (c == -1) {
+			break;
+		}
+
+		switch (c) {
+		case 'v':
+			verbose = 1;
+			break;
+
+		case '?':
+			break;
+		}
+	}
+
     GIOChannel *touchscreen;
     gint events;
 
@@ -873,7 +900,7 @@ int main(int argc, char *argv[])
     opt_dst = g_strdup("00:17:53:57:81:86");
     opt_dst_type = g_strdup("public");
 
-    printf("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n");
+    LOG("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n");
 
     event_loop = g_main_loop_new(NULL, FALSE);
 
