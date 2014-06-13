@@ -164,7 +164,7 @@ err:
 
 int uinput_write_event(struct uinput_info *info, struct input_event *ev)
 {
-	VLOG("[\e[33m%ld\e[0m][%s] %04x %d\n", ev->time.tv_usec,
+	VLOG("[\e[33m%05ld.%06ld\e[0m] [%s] 0x%04x\t%d\n", ev->time.tv_sec, ev->time.tv_usec,
 			(ev->type == EV_SYN ? "EV_SYN" :
 				ev->type == EV_KEY ? "EV_KEY" :
 				ev->type == EV_ABS ? "EV_ABS" : "UNKNOWN"),

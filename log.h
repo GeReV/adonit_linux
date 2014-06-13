@@ -23,7 +23,7 @@
 #define LOG_H
 #include <syslog.h>
 
-static int verbose = 0;
+extern int verbose;
 
 #define VLOG(x...) if (verbose) { \
 		LOG(x); \
