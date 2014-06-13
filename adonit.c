@@ -122,50 +122,36 @@ struct input_event event;
 int prev_btn_0;
 int prev_btn_1;
 
+void write_event(uint16_t type, uint16_t code, int32_t value) {
+	struct input_event ev;
+
+	gettimeofday(&ev.time, 0);
+
+	ev.type = type;
+	ev.code = code;
+	ev.value = value;
+
+	uinput_write_event(&uinfo, &ev);
+}
+
 void pen_update(uint16_t p)
 {
-    struct input_event ev;
-
-    gettimeofday(&ev.time, 0);
-
     int btn_0 = (p & 0x1);
     int btn_1 = (p & 0x2) >> 1;
 
     if (btn_0 != prev_btn_0) {
-        ev.type = EV_KEY;
-        ev.code = BTN_0;
-        ev.value = btn_0;
-
-        uinput_write_event(&uinfo, &ev);
-
-        printf("Button 0\n");
+		write_event(EV_KEY, BTN_0, btn_0);
     }
     prev_btn_0 = btn_0;
 
     if (btn_1 != prev_btn_1) {
-        ev.type = EV_KEY;
-        ev.code = BTN_1;
-        ev.value = btn_1;
-
-        uinput_write_event(&uinfo, &ev);
-
-        printf("Button 1\n");
+		write_event(EV_KEY, BTN_1, btn_1);
     }
     prev_btn_1 = btn_1;
 
-    ev.type = EV_ABS;
-    ev.code = ABS_PRESSURE;
-    ev.value = (p >> 5) & 0x7ff;
-    uinput_write_event(&uinfo, &ev);
+    write_event(EV_ABS, ABS_PRESSURE, (p >> 5) & 0x7ff);
 
-    printf("Pressure: %d\n", ev.value);
-
-    ev.type = EV_SYN;
-    ev.code = SYN_REPORT;
-    ev.value = 0;
-
-    uinput_write_event(&uinfo, &ev);
-
+    write_event(EV_SYN, SYN_REPORT, 0);
 }
 
 gboolean touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_data) {
@@ -175,35 +161,28 @@ gboolean touchscreen_update(GIOChannel *chan, GIOCondition cond, gpointer user_d
     GError *error = NULL;
 
     if (error) {
-        printf("%s", error->message);
+        LOG("%s", error->message);
     }
 
     while(G_IO_STATUS_NORMAL == g_io_channel_read_chars(chan, buffer, sizeof(struct input_event), &size, &error)) {
         ev = (struct input_event *)buffer;
 
         if (ev->type == EV_SYN) {
-            printf("PACK %i %i\n", ev->code, ev->value);
+            //printf("PACK %i %i\n", ev->code, ev->value);
         } else if (ev->type == EV_KEY) {
             //if (ev->code == BTN_TOUCH) {
             //    ev->code = BTN_TOOL_PEN;
             //}
-            printf("EV_KEY code=%i value=%i\n", ev->code, ev->value);
 
             uinput_write_event(&uinfo, ev);
         } else if (ev->type == EV_ABS) {
-            printf("EV_ABS code=%i value=%i\n", ev->code, ev->value);
-
             if (ev->code == ABS_X || ev->code == ABS_Y) {
                 uinput_write_event(&uinfo, ev);
             }
         }
     }
 
-    ev->type = EV_SYN;
-    ev->code = SYN_REPORT;
-    ev->value = 0;
-
-    uinput_write_event(&uinfo, ev);
+    write_event(EV_SYN, SYN_REPORT, 0);
 
     return TRUE;
 }
