@@ -116,22 +116,25 @@ static const char
 struct uinput_info uinfo;
 struct uinput_user_dev dev;
 
-int fd;
+static int fd;
 struct input_event event;
 
 int prev_btn_0;
 int prev_btn_1;
 
+int verbose = 0;
+char* touchscreen_device = NULL;
+
 void write_event(uint16_t type, uint16_t code, int32_t value) {
-	struct input_event ev;
+    struct input_event ev;
 
-	gettimeofday(&ev.time, 0);
+    gettimeofday(&ev.time, 0);
 
-	ev.type = type;
-	ev.code = code;
-	ev.value = value;
+    ev.type = type;
+    ev.code = code;
+    ev.value = value;
 
-	uinput_write_event(&uinfo, &ev);
+    uinput_write_event(&uinfo, &ev);
 }
 
 void pen_update(uint16_t p)
@@ -140,12 +143,12 @@ void pen_update(uint16_t p)
     int btn_1 = (p & 0x2) >> 1;
 
     if (btn_0 != prev_btn_0) {
-		write_event(EV_KEY, BTN_0, btn_0);
+        write_event(EV_KEY, BTN_0, btn_0);
     }
     prev_btn_0 = btn_0;
 
     if (btn_1 != prev_btn_1) {
-		write_event(EV_KEY, BTN_1, btn_1);
+        write_event(EV_KEY, BTN_1, btn_1);
     }
     prev_btn_1 = btn_1;
 
@@ -832,7 +835,12 @@ static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
 }
 
 int init_touchscreen() {
-    int fd = open("/dev/input/event9", O_RDONLY | O_NONBLOCK);
+    if (touchscreen_device == NULL) {
+        LOG("No touchscreen device was specified. Please use the --touchscreen option to specify one.\n");
+        exit(0);
+    }
+
+    int fd = open(touchscreen_device, O_RDONLY | O_NONBLOCK);
 
     int grab = 1;
     ioctl(fd, EVIOCGRAB, &grab);
@@ -842,33 +850,36 @@ int init_touchscreen() {
 
 int main(int argc, char *argv[])
 {
-	int c;
+    int c;
 
-	while (1) {
-		int this_option_optind = optind ? optind : 1;
-		int option_index = 0;
+    while (1) {
+        int this_option_optind = optind ? optind : 1;
+        int option_index = 0;
 
-		static struct option long_options[] = {
-			{"verbose",	no_argument,       0,  	'v'	},
-			{0,         0,                 0,  	0 	}
-		};
+        static struct option long_options[] = {
+            {"verbose",	    no_argument,       0,  	'v' },
+            {"touchscreen", required_argument,  0,  't' },
+            {0,             0,                  0,  0   }
+        };
 
-		c = getopt_long(argc, argv, "v",
-				 long_options, &option_index);
+        c = getopt_long(argc, argv, "v",
+                long_options, &option_index);
 
-		if (c == -1) {
-			break;
-		}
+        if (c == -1) {
+            break;
+        }
 
-		switch (c) {
-		case 'v':
-			verbose = 1;
-			break;
-
-		case '?':
-			break;
-		}
-	}
+        switch (c) {
+            case 'v':
+                verbose = 1;
+                break;
+            case 't':
+                touchscreen_device = optarg;
+                break;
+            case '?':
+                break;
+        }
+    }
 
     GIOChannel *touchscreen;
     gint events;
@@ -879,7 +890,7 @@ int main(int argc, char *argv[])
     opt_dst = g_strdup("00:17:53:57:81:86");
     opt_dst_type = g_strdup("public");
 
-    LOG("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n");
+    LOG("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n\n");
 
     event_loop = g_main_loop_new(NULL, FALSE);
 
@@ -887,6 +898,8 @@ int main(int argc, char *argv[])
 
     LOG("Opening uinput device...\n");
     if (uinput_create(&uinfo)) {
+        return 1;
+    } else {
         LOG("uinput device created successfully.\n");
     }
 
@@ -900,7 +913,7 @@ int main(int argc, char *argv[])
             0, 0, connect_cb);
 
     if (iochannel == NULL) {
-        LOG("NULL iochannel\n");
+        LOG("Couldn't connect to Bluetooth device.\n");
         return 1;
     } else {
         g_io_add_watch(iochannel, G_IO_HUP, channel_watcher, NULL);
