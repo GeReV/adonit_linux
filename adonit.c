@@ -837,7 +837,7 @@ static void exchange_mtu_cb(guint8 status, const guint8 *pdu, guint16 plen,
 
 int init_touchscreen() {
     if (touchscreen_device == NULL) {
-        LOG("No touchscreen device was specified. Please use the --touchscreen option to specify one.\n");
+        LOG("No touchscreen device specified. Please use the --touchscreen option to specify one.\n");
         exit(0);
     }
 
