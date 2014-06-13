@@ -124,6 +124,7 @@ int prev_btn_1;
 
 int verbose = 0;
 char* touchscreen_device = NULL;
+char* pen_address = NULL;
 
 void write_event(uint16_t type, uint16_t code, int32_t value) {
     struct input_event ev;
@@ -859,6 +860,7 @@ int main(int argc, char *argv[])
         static struct option long_options[] = {
             {"verbose",	    no_argument,       0,  	'v' },
             {"touchscreen", required_argument,  0,  't' },
+            {"pen",         required_argument,  0,  'p' },
             {0,             0,                  0,  0   }
         };
 
@@ -873,6 +875,9 @@ int main(int argc, char *argv[])
             case 'v':
                 verbose = 1;
                 break;
+            case 'p':
+                pen_address = optarg;
+                break;
             case 't':
                 touchscreen_device = optarg;
                 break;
@@ -886,11 +891,15 @@ int main(int argc, char *argv[])
 
     opt_sec_level = g_strdup("low");
 
-    opt_src = NULL;
-    opt_dst = g_strdup("00:17:53:57:81:86");
+    opt_dst = g_strdup(pen_address);
     opt_dst_type = g_strdup("public");
 
     LOG("# " __FILE__ " built at " __TIME__ " on " __DATE__ "\n\n");
+
+    if (opt_dst == NULL) {
+        LOG("No pen device address specified. Please use the --pen option to specify one.\n");
+        return 1;
+    }
 
     event_loop = g_main_loop_new(NULL, FALSE);
 
