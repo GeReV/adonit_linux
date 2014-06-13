@@ -906,9 +906,9 @@ int main(int argc, char *argv[])
 
     uinfo.create_mode = WDAEMON_CREATE;
 
-    printf("Opening uinput device...");
+    LOG("Opening uinput device...\n");
     if (uinput_create(&uinfo)) {
-        printf("UInput device created successfully.");
+        LOG("uinput device created successfully.\n");
     }
 
     touchscreen = g_io_channel_unix_new(init_touchscreen());
@@ -921,13 +921,13 @@ int main(int argc, char *argv[])
             0, 0, connect_cb);
 
     if (iochannel == NULL) {
-        printf("NULL iochannel");
+        LOG("NULL iochannel\n");
         return 1;
     } else {
         g_io_add_watch(iochannel, G_IO_HUP, channel_watcher, NULL);
     }
 
-    printf("Starting loop.");
+    VLOG("Starting loop.");
     g_main_loop_run(event_loop);
 
     disconnect_io();
